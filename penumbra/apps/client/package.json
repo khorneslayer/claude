@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "shot": "node scripts/screenshot.mjs",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "probe:smoke": "node scripts/probe-smoke.mjs",
+    "demo": "vite --open /?demo"
   },
   "dependencies": {
     "@deck.gl/core": "9.4.1",

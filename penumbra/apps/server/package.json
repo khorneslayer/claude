@@ -8,7 +8,8 @@
   },
   "scripts": {
     "dev": "tsx watch src/main.ts --manual",
-    "start": "tsx src/main.ts"
+    "start": "tsx src/main.ts",
+    "demo": "tsx src/main.ts --paused"
   },
   "dependencies": {
     "@penumbra/core": "workspace:*",

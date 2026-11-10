@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: "127.0.0.1",
-    proxy: { "/ws": { target: FEED.replace(/^http/, "ws"), ws: true } },
+    proxy: { "/ws": { target: FEED.replace(/^http/, "ws"), ws: true }, "/api": { target: FEED } },
     fs: { allow: ["../.."] },
   },
   build: { target: "es2022", chunkSizeWarningLimit: 2500 },

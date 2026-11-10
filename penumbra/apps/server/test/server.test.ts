@@ -201,3 +201,55 @@ describe("PenumbraServer", () => {
     expect(c.messages.filter((m) => m.type === "snapshot").length).toBeGreaterThan(2);
   });
 });
+
+describe("session logs (/api/sessions)", () => {
+  it("appends NDJSON batches per session and refuses unsafe ids and bad lines", async () => {
+    const { mkdtempSync, readFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "penumbra-sessions-"));
+    const compiled = compileScenario(def);
+    server = new PenumbraServer({ compiled, port: 0, tickMs: 0, snapshotHz: 0, autoplay: false, sessionsDir: dir });
+    const { url } = await server.start();
+    const base = url.replace("ws://", "http://").replace("/ws", "");
+    const post = (id: string, body: string) => fetch(`${base}/api/sessions/${id}`, { method: "POST", body });
+    expect((await post("S1", '{"kind":"a"}\n{"kind":"b"}\n')).status).toBe(200);
+    expect((await post("S1", '{"kind":"c"}\n')).status).toBe(200);
+    expect(readFileSync(join(dir, "S1.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l).kind)).toEqual(["a", "b", "c"]);
+    expect((await post("..%2Fescape", '{"kind":"x"}')).status).toBe(400);
+    expect((await post("S2", "not json")).status).toBe(400);
+    expect((await post("S2", "[1,2]")).status).toBe(400);
+    expect(await (await fetch(`${base}/api/sessions`)).json()).toEqual([{ id: "S1", bytes: expect.any(Number) }]);
+    expect((await fetch(`${base}/api/sessions/S1`)).status).toBe(200);
+    expect((await fetch(`${base}/api/sessions/nope`)).status).toBe(404);
+  });
+
+  it("is off unless a sessions directory is configured", async () => {
+    server = new PenumbraServer({ compiled: compileScenario(def), port: 0, tickMs: 0, snapshotHz: 0, autoplay: false });
+    const { url } = await server.start();
+    expect((await fetch(`${url.replace("ws://", "http://").replace("/ws", "")}/api/sessions/S1`, { method: "POST", body: "{}" })).status).toBe(404);
+  });
+});
+
+describe("probe report", () => {
+  it("aggregates accuracy and median time per view and question, last answer per trial", async () => {
+    const { probeReport, formatReport } = await import("../src/probe-report");
+    const a = (participant: string, view: string, question: string, correct: boolean, latencyMs: number) => ({
+      kind: "probe_answer",
+      data: { participant, view, question, correct, latencyMs, trial: `${view}-${question}` },
+    });
+    const r = probeReport([
+      a("P1", "penumbra", "stale", true, 2000),
+      a("P1", "legacy", "stale", false, 7000),
+      a("P2", "penumbra", "stale", true, 3000),
+      a("P2", "legacy", "stale", false, 9000),
+      a("P2", "legacy", "stale", true, 5000), // retry: replaces the previous answer
+      { kind: "select", data: {} },
+    ]);
+    expect(r.participants).toBe(2);
+    expect(r.answers).toBe(4);
+    expect(r.byView.penumbra).toEqual({ n: 2, accuracy: 1, medianMs: 2500 });
+    expect(r.byView.legacy).toEqual({ n: 2, accuracy: 0.5, medianMs: 6000 });
+    expect(formatReport(r)).toContain("| PENUMBRA | 2 | 100 % | 2.5 s |");
+  });
+});

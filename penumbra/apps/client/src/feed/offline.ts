@@ -12,7 +12,7 @@ const TICK_MS = 100;
  */
 export function startOffline(
   store: FeedStore,
-  opts: { at?: string; speed?: number; paused?: boolean; stress?: number; scripted?: boolean } = {},
+  opts: { at?: string; atEnd?: boolean; speed?: number; paused?: boolean; stress?: number; scripted?: boolean } = {},
 ): FeedSource {
   // Interactive by default: decisions from playback onwards are the operator's.
   const compiled: CompiledScenario = compileScenario(parseScenario(scenarioText), { manualOperator: !opts.scripted });
@@ -44,7 +44,7 @@ export function startOffline(
   };
 
   store.onHello(meta, { head, playing, speed, ended: false });
-  const startAt = opts.at ? clockToMillis(meta.date, opts.at) : meta.playFrom;
+  const startAt = opts.atEnd ? meta.end : opts.at ? clockToMillis(meta.date, opts.at) : meta.playFrom;
   restart(Math.min(meta.end, Math.max(meta.playFrom, startAt)));
   clock();
 

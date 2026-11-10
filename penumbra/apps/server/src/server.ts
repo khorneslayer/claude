@@ -4,6 +4,7 @@ import { EventLog, project, Projector, validateOperatorAction, type DraftEvent, 
 import type { CompiledScenario } from "@penumbra/sim";
 import { WebSocketServer, type WebSocket } from "ws";
 import { PROTOCOL_VERSION, type ClientMsg, type ClockState, type ServerMsg } from "@penumbra/sim";
+import { SessionError, SessionStore } from "./sessions";
 
 export interface ServerOptions {
   compiled: CompiledScenario;
@@ -15,6 +16,8 @@ export interface ServerOptions {
   snapshotHz?: number;
   speed?: number;
   autoplay?: boolean;
+  /** Directory for per-session interaction logs (JSONL). Undefined disables /api/sessions. */
+  sessionsDir?: string;
 }
 
 interface Client {
@@ -38,7 +41,8 @@ const stripSeq = (e: LogEvent): DraftEvent => {
  */
 export class PenumbraServer {
   private readonly compiled: CompiledScenario;
-  private readonly opts: Required<Omit<ServerOptions, "compiled">>;
+  private readonly opts: Required<Omit<ServerOptions, "compiled" | "sessionsDir">>;
+  private readonly sessions?: SessionStore;
   private log = new EventLog();
   /** Folded state of the live log, so a live snapshot only costs an evaluation. */
   private projector = new Projector();
@@ -63,6 +67,7 @@ export class PenumbraServer {
       speed: options.speed ?? 1,
       autoplay: options.autoplay ?? true,
     };
+    if (options.sessionsDir) this.sessions = new SessionStore(options.sessionsDir);
     this.head = this.compiled.meta.playFrom;
     this.playing = this.opts.autoplay;
     this.speed = this.opts.speed;
@@ -275,6 +280,10 @@ export class PenumbraServer {
 
   private handleHttp(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? "/", "http://localhost");
+    if (url.pathname === "/api/sessions" || url.pathname.startsWith("/api/sessions/")) {
+      void this.handleSessions(req, res, url.pathname.slice("/api/sessions".length).replace(/^\//, ""));
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/health") {
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ ok: true, scenario: this.compiled.meta.id, clock: this.clock, lastSeq: this.log.lastSeq }));
@@ -288,5 +297,33 @@ export class PenumbraServer {
     }
     res.writeHead(404, { "content-type": "text/plain" });
     res.end("not found\n");
+  }
+
+  /** POST /api/sessions/:id (NDJSON append) · GET /api/sessions · GET /api/sessions/:id */
+  private async handleSessions(req: IncomingMessage, res: ServerResponse, id: string) {
+    const reply = (status: number, body: unknown, type = "application/json") => {
+      res.writeHead(status, { "content-type": type });
+      res.end(typeof body === "string" ? body : JSON.stringify(body));
+    };
+    if (!this.sessions) return reply(404, { error: "session logging is disabled" });
+    try {
+      if (req.method === "POST" && id) {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of req) {
+          size += (chunk as Buffer).length;
+          if (size > 1_000_000) return reply(413, { error: "batch too large" });
+          chunks.push(chunk as Buffer);
+        }
+        const written = await this.sessions.append(id, Buffer.concat(chunks).toString("utf8"));
+        return reply(200, { written });
+      }
+      if (req.method === "GET" && !id) return reply(200, await this.sessions.list());
+      if (req.method === "GET" && id) return reply(200, await this.sessions.read(id), "application/x-ndjson");
+      return reply(405, { error: "method not allowed" });
+    } catch (e) {
+      if (e instanceof SessionError) return reply(e.status, { error: e.message });
+      return reply(500, { error: "could not store the session batch" });
+    }
   }
 }

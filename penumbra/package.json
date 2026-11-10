@@ -17,7 +17,12 @@
     "client": "pnpm --filter @penumbra/client dev",
     "build": "pnpm --filter @penumbra/client build",
     "shot": "pnpm --filter @penumbra/client shot",
-    "smoke": "pnpm --filter @penumbra/client smoke"
+    "smoke": "pnpm --filter @penumbra/client smoke",
+    "probe:report": "tsx apps/server/src/probe-report.ts",
+    "probe:smoke": "pnpm --filter @penumbra/client probe:smoke",
+    "demo": "pnpm --parallel --filter @penumbra/server --filter @penumbra/client demo",
+    "demo:record": "node apps/client/scripts/record-demo.mjs",
+    "probe": "pnpm dev"
   },
   "devDependencies": {
     "@types/node": "26.6.6",

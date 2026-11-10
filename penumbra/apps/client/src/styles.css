@@ -188,3 +188,24 @@ html, body, #root { margin: 0; height: 100%; background: var(--bg); color: var(-
 .details { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 13px; margin: 0 0 18px; }
 .details dt { color: var(--dim); letter-spacing: 0.08em; }
 .details dd { margin: 0; }
+
+/* ---------------------------------------------------------------- M5 probe, demo, capture */
+.probe-modal { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(520px, calc(100% - 32px)); background: var(--panel); border: 1px solid var(--cyan); padding: 22px 24px; z-index: 6; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
+.probe-modal h2 { font-size: 18px; font-weight: 500; letter-spacing: 0.04em; margin: 6px 0 14px; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.probe-modal p { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.5; color: var(--dim); }
+.probe-modal label { display: grid; gap: 6px; font-size: 12px; letter-spacing: 0.12em; color: var(--dim); margin: 14px 0; }
+.probe-modal input { font: inherit; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--line); padding: 8px 10px; }
+.probe-modal button, .probe-bar button { font: inherit; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; padding: 10px 14px; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--text); }
+.probe-modal button.primary { background: var(--cyan); color: #04131a; border-color: var(--cyan); font-weight: 600; }
+.probe-step { font-size: 11px; letter-spacing: 0.16em; color: var(--cyan); text-transform: uppercase; }
+.probe-bar { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: rgba(8, 12, 26, 0.96); border: 1px solid var(--cyan); z-index: 6; max-width: calc(100% - 32px); font-size: 14px; }
+.probe-bar b { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-weight: 500; }
+.probe-hint { color: var(--amber); font-size: 12px; }
+.probe-summary { width: 100%; border-collapse: collapse; font-size: 14px; margin: 8px 0 12px; }
+.probe-summary th, .probe-summary td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+.probe-summary th { color: var(--dim); font-weight: 400; font-size: 12px; letter-spacing: 0.12em; }
+.probe-note { font-size: 12px !important; }
+.caption { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); width: min(880px, calc(100% - 48px)); padding: 14px 20px; background: rgba(8, 12, 26, 0.92); border-left: 3px solid var(--cyan); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 20px; line-height: 1.4; color: var(--text); z-index: 5; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+html.capture, html.capture body { overflow: hidden; background: #000; }
+html.capture #root { width: 1920px; height: 1080px; transform-origin: 0 0; transform: scale(var(--capture-scale, 1)); }
+html.demo .legend, html.demo .banner { bottom: 68px; }

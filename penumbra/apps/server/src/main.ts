@@ -7,7 +7,7 @@
 import { formatClock } from "@penumbra/core";
 import { compileScenario, loadScenarioFile } from "@penumbra/sim";
 import { parseArgs } from "node:util";
-import { DEFAULT_SCENARIO } from "./paths";
+import { DEFAULT_SCENARIO, SESSIONS_DIR } from "./paths";
 import { PenumbraServer } from "./server";
 
 const { values } = parseArgs({
@@ -19,6 +19,8 @@ const { values } = parseArgs({
     seed: { type: "string" },
     manual: { type: "boolean", default: false },
     paused: { type: "boolean", default: false },
+    "sessions-dir": { type: "string" },
+    "no-sessions": { type: "boolean", default: false },
   },
 });
 
@@ -33,6 +35,7 @@ const server = new PenumbraServer({
   host: values.host!,
   speed: Number(values.speed),
   autoplay: !values.paused,
+  ...(values["no-sessions"] ? {} : { sessionsDir: values["sessions-dir"] ?? SESSIONS_DIR }),
 });
 const { url } = await server.start();
 const m = compiled.meta;
@@ -41,6 +44,7 @@ console.log(`  ${compiled.events.length} events · playback ${formatClock(m.play
 console.log(`  websocket  ${url}`);
 console.log(`  health     ${url.replace("ws://", "http://").replace("/ws", "/health")}`);
 console.log(`  log export ${url.replace("ws://", "http://").replace("/ws", "/log.jsonl")}`);
+if (!values["no-sessions"]) console.log(`  sessions   ${values["sessions-dir"] ?? SESSIONS_DIR} (POST/GET /api/sessions)`);
 
 const shutdown = () => void server.stop().then(() => process.exit(0));
 process.on("SIGINT", shutdown);

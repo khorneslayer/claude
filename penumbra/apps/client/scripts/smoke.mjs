@@ -8,6 +8,9 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../../..");
@@ -47,7 +50,9 @@ const check = (ok, msg) => {
 
 try {
   const tsx = resolve(root, "node_modules/tsx/dist/cli.mjs");
-  await start(process.execPath, [tsx, "apps/server/src/main.ts", "--port", FEED_PORT, "--speed", "8", "--manual"], root, /websocket/);
+  // A throwaway sessions folder, so test runs never mix with real study sessions.
+  const sessionsDir = mkdtempSync(join(tmpdir(), "penumbra-smoke-"));
+  await start(process.execPath, [tsx, "apps/server/src/main.ts", "--port", FEED_PORT, "--speed", "8", "--manual", "--sessions-dir", sessionsDir], root, /websocket/);
   await start(process.execPath, [resolve(here, "../node_modules/vite/bin/vite.js"), "--port", WEB_PORT, "--strictPort", "--host", "127.0.0.1"], resolve(here, ".."), /Local/, {
     PENUMBRA_FEED: `http://127.0.0.1:${FEED_PORT}`,
   });
@@ -146,6 +151,15 @@ try {
   await page.waitForFunction(() => window.__penumbra.view === "penumbra", null, { timeout: 10000 }).catch(() => {});
   await page.locator(".panel.left .panel-title.alert").waitFor({ timeout: 10000 }).catch(() => {});
   check(/CONTRADICTION REGISTER/i.test(await page.locator(".panel.left").innerText()), "V switches back to PENUMBRA");
+
+  // M5: every interaction reached the server's session log.
+  await page.evaluate(() => window.__penumbra.recorder.flush());
+  await page.waitForTimeout(800);
+  const local = await page.evaluate(() => ({ id: window.__penumbra.recorder.id, kinds: window.__penumbra.recorder.events.map((e) => e.kind) }));
+  const stored = await (await fetch(`http://127.0.0.1:${FEED_PORT}/api/sessions/${local.id}`)).text();
+  const storedKinds = stored.trim().split("\n").filter(Boolean).map((l) => JSON.parse(l).kind);
+  check(storedKinds.length === local.kinds.length, `session log on the server matches the browser (${storedKinds.length}/${local.kinds.length} events)`);
+  check(["control", "action_request", "action_result", "replay", "live", "view"].every((k) => storedKinds.includes(k)), `interactions recorded: ${[...new Set(storedKinds)].join(", ")}`);
 
   check(errors.length === 0, `no page errors${errors.length ? `: ${errors.join("; ")}` : ""}`);
   await browser.close();

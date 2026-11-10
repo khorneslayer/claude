@@ -20,6 +20,10 @@ import { Banner, Legend } from "./ui/Legend";
 import { RightPanel, Toast } from "./ui/Provenance";
 import { LeftPanel } from "./ui/Register";
 import { Stats } from "./ui/Stats";
+import { Caption } from "./demo/Captions";
+import { cuesBetween, DEMO_CUES, epilogue, type Cue } from "./demo/director";
+import { ProbeRunner, type ProbeClick } from "./probe/ProbeRunner";
+import { SessionRecorder } from "./session/recorder";
 
 /**
  * URL parameters
@@ -34,6 +38,9 @@ import { Stats } from "./ui/Stats";
  *   ?scripted            offline: keep the scenario's scripted decisions after playFrom
  *   ?view=legacy         open in the LEGACY view (toggle with V)
  *   ?replay=14:36:00     open replaying that moment (scrub with the timeline, arrow keys; End returns to live)
+ *   ?probe               run the legibility probe (offline, both views, timed answers)
+ *   ?demo                scripted walkthrough with captions (restarts the feed; offline fallback plays the scripted ending)
+ *   ?capture=1080p       render at exactly 1920 x 1080, scaled to fit the window (for recording)
  */
 const params = new URLSearchParams(window.location.search);
 const FROZEN_AT = params.get("t") ?? undefined;
@@ -46,9 +53,37 @@ const SCRIPTED = params.has("scripted");
 /** Mock releasability marking (slide 6, item 08): visible without opening a dialogue. */
 const MARKING = "EXERCISE · SYNTHETIC DATA · REL DEU/NLD (MOCK)";
 export type ViewMode = "penumbra" | "legacy";
+const PROBE = params.has("probe");
+const DEMO = params.has("demo");
+const CAPTURE = params.get("capture") === "1080p";
+/** Probe and demo own the screen: no shortcuts, no transport, no view switch. */
+const LOCKED = PROBE || DEMO;
+
+if (CAPTURE || DEMO) {
+  const root = document.documentElement;
+  if (DEMO) root.classList.add("demo");
+  if (CAPTURE) {
+    root.classList.add("capture");
+    const fit = () => root.style.setProperty("--capture-scale", String(Math.min(window.innerWidth / 1920, window.innerHeight / 1080)));
+    fit();
+    window.addEventListener("resize", fit);
+  }
+}
 
 export function App() {
   const store = useMemo(() => new FeedStore(), []);
+  // Session instrumentation. Context is read at log time through a ref.
+  const ctx = useRef({ simT: undefined as number | undefined, view: "penumbra", replay: false, mode: PROBE ? "probe" : DEMO ? "demo" : "live" });
+  const recorder = useMemo(() => {
+    const r = new SessionRecorder(() => ctx.current);
+    // Record transport controls wherever they come from.
+    const control = store.control.bind(store);
+    store.control = (cmd, speed) => {
+      r.log("control", { command: cmd, ...(speed !== undefined ? { speed } : {}) });
+      control(cmd, speed);
+    };
+    return r;
+  }, [store]);
   const status = useSyncExternalStore(store.subscribe, () => store.status);
   const [liveSnap, setLiveSnap] = useState<PictureSnapshot>();
   const version = useSyncExternalStore(store.subscribe, store.getVersion);
@@ -84,21 +119,34 @@ export function App() {
     if (booted.current) return;
     booted.current = true;
     const speed = params.get("speed") ? Number(params.get("speed")) : undefined;
+    recorder.log("session_start", { params: Object.fromEntries(params), operator: OPERATOR, userAgent: navigator.userAgent });
     const offline = () =>
       startOffline(store, {
         ...(FROZEN_AT ? { at: FROZEN_AT, paused: true } : {}),
+        ...(PROBE ? { atEnd: true, paused: true } : {}),
         ...(speed ? { speed } : {}),
         ...(STRESS ? { stress: STRESS } : {}),
-        scripted: SCRIPTED,
+        scripted: SCRIPTED || DEMO,
       });
-    if (FROZEN_AT || STRESS || params.get("mode") === "offline") {
+    if (FROZEN_AT || STRESS || PROBE || params.get("mode") === "offline") {
       offline();
+      // The probe plays offline, but its answers still go to the feed server's session store when one is reachable.
+      if (PROBE)
+        void fetch("/api/sessions")
+          .then((r) => r.ok && recorder.enableRemote())
+          .catch(() => {});
       return;
     }
     const url = params.get("ws") ?? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`;
     void connectLive(store, url).then((ok) => {
-      if (!ok) offline();
-      else if (speed) store.control("speed", speed);
+      if (!ok) return offline();
+      recorder.enableRemote();
+      if (DEMO) {
+        // The demo owns the clock: start from the top at the requested speed.
+        store.control("restart");
+        store.control("speed", speed ?? 1);
+        store.control("play");
+      } else if (speed) store.control("speed", speed);
     });
   }, [store]);
 
@@ -129,7 +177,7 @@ export function App() {
   // Space toggles play / pause.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !FROZEN_AT && !(e.target instanceof HTMLSelectElement)) {
+      if (e.code === "Space" && !FROZEN_AT && !LOCKED && !(e.target instanceof HTMLSelectElement)) {
         e.preventDefault();
         store.control(store.clock?.playing ? "pause" : "play");
       }
@@ -150,7 +198,7 @@ export function App() {
   // Replay keys: arrows step back/forward (Shift = 1 min), End or Escape returns to live. V switches view.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.metaKey || e.ctrlKey) return;
+      if (LOCKED || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.metaKey || e.ctrlKey) return;
       const head = liveSnap?.t;
       if (head === undefined) return;
       const step = e.shiftKey ? 60_000 : 5_000;
@@ -183,7 +231,25 @@ export function App() {
   }, [snap, model, status, store, view, replayT]);
   useEffect(() => {
     const w = window as unknown as { __penumbra?: Record<string, unknown> };
-    if (w.__penumbra) Object.assign(w.__penumbra, { selection, prov, cards, legacy, setReplayT, setView });
+    if (w.__penumbra)
+      Object.assign(w.__penumbra, {
+        selection,
+        prov,
+        cards,
+        legacy,
+        setReplayT,
+        setView,
+        recorder,
+        caption,
+        demoDone,
+        // lon/lat -> page pixel, for automated clicks
+        project: (lonLat: [number, number]) => {
+          if (!viewState || !mapSize || !mapRef.current) return undefined;
+          const [x, y] = new WebMercatorViewport({ ...viewState, ...mapSize }).project(lonLat);
+          const r = mapRef.current.getBoundingClientRect();
+          return [r.left + x!, r.top + y!];
+        },
+      });
   });
 
   // Label anchor for lost coverage: the lost cell nearest the centre, nudged into the lost area.
@@ -278,6 +344,13 @@ export function App() {
   // Selection: what the provenance panel shows. Until the operator picks something,
   // it follows the newest open contradiction's leading candidate (slide 7).
   const [userSel, setUserSel] = useState<Selection>();
+  const select = useCallback(
+    (sel: Selection, via: string) => {
+      setUserSel(sel);
+      recorder.log("select", { ...sel, via });
+    },
+    [recorder],
+  );
   const selection = useMemo(() => (snap ? (reconcileSelection(userSel, snap) ?? defaultSelection(snap)) : undefined), [snap, userSel]);
   const lookups: Lookups = useMemo(() => ({ obs: store.lookupObs, verdict: store.lookupVerdict }), [store]);
   const cards = useMemo(() => (snap ? registerCards(snap, lookups) : []), [snap, lookups]);
@@ -305,6 +378,7 @@ export function App() {
       if (!a?.dimension || busy) return;
       if (kind === "resolve" ? !a.canResolve : !a.canDefer) return;
       setBusy(true);
+      recorder.log("action_request", { action: kind, contradictionId: a.contradictionId, entityId: a.entityId, dimension: a.dimension, value: a.resolveValue });
       const error = await store.act({
         operatorId: OPERATOR,
         action: kind,
@@ -313,25 +387,96 @@ export function App() {
         ...(kind === "resolve" && a.resolveValue ? { value: a.resolveValue } : {}),
       });
       setBusy(false);
+      recorder.log("action_result", { action: kind, contradictionId: a.contradictionId, ok: !error, ...(error ? { error } : {}) });
       setToast(
         error
           ? { message: error, tone: "error" }
           : { message: `${a.contradictionId} ${kind === "resolve" ? `resolved as ${a.resolveValue?.replaceAll("-", " ")}` : "deferred"} · ${OPERATOR}`, tone: "ok" },
       );
     },
-    [prov, busy, store],
+    [prov, busy, store, recorder],
   );
 
   // R resolves, D defers the selected item.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.metaKey || e.ctrlKey) return;
+      if (LOCKED || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.metaKey || e.ctrlKey) return;
       if (e.key === "r" || e.key === "R") void act("resolve");
       if (e.key === "d" || e.key === "D") void act("defer");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [act]);
+
+  // Keep the recorder's context current; record view switches and (debounced) replay moves.
+  ctx.current = { simT: snap?.t, view, replay: replayT !== undefined, mode: ctx.current.mode };
+  const firstView = useRef(true);
+  useEffect(() => {
+    if (firstView.current) {
+      firstView.current = false;
+      return;
+    }
+    recorder.log("view", { view });
+  }, [view, recorder]);
+  // Entering replay and returning to live are logged at once; scrubbing moves in between are debounced.
+  const prevReplay = useRef<Millis | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevReplay.current;
+    prevReplay.current = replayT;
+    if (replayT === undefined) {
+      if (prev !== undefined) recorder.log("live");
+      return;
+    }
+    if (prev === undefined) {
+      recorder.log("replay", { at: new Date(replayT).toISOString() });
+      return;
+    }
+    const id = setTimeout(() => recorder.log("replay_move", { at: new Date(replayT).toISOString() }), 400);
+    return () => clearTimeout(id);
+  }, [replayT, recorder]);
+  useEffect(() => {
+    if (status === "live") recorder.enableRemote();
+  }, [status, recorder]);
+  useEffect(() => {
+    const flush = () => void recorder.flush();
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, [recorder]);
+
+  // Probe: the runner receives map clicks while it is active.
+  const probeClick = useRef<((c: ProbeClick) => void) | null>(null);
+  const registerProbeClick = useCallback((fn: ((c: ProbeClick) => void) | null) => {
+    probeClick.current = fn;
+  }, []);
+
+  // Demo director: cues fire as the live head passes them, then the epilogue after the end.
+  const [caption, setCaption] = useState<string | null>();
+  const [demoDone, setDemoDone] = useState(false);
+  const applyCue = useCallback(
+    (c: Cue) => {
+      if (c.caption !== undefined) setCaption(c.caption);
+      if (c.select) select(c.select, "demo");
+      if (c.view) setView(c.view);
+      if (c.replay === "live") setReplayT(undefined);
+      else if (c.replay && meta) setReplayT(clockToMillis(meta.date, c.replay));
+      if (c.end) setDemoDone(true);
+      recorder.log("demo_cue", { at: c.at, ...(c.caption ? { caption: c.caption } : {}) });
+    },
+    [select, meta, recorder],
+  );
+  const lastHead = useRef<number>(Number.NEGATIVE_INFINITY);
+  useEffect(() => {
+    if (!DEMO || !liveSnap || !meta) return;
+    const prev = lastHead.current;
+    lastHead.current = liveSnap.t;
+    for (const c of cuesBetween(DEMO_CUES, prev, liveSnap.t, (clock) => clockToMillis(meta.date, clock))) applyCue(c);
+  }, [liveSnap?.t, meta, applyCue]);
+  const ended = store.clock?.ended ?? false;
+  useEffect(() => {
+    if (!DEMO || !ended) return;
+    const timers = epilogue(DEMO_CUES).map((c) => setTimeout(() => applyCue(c), c.at.afterEndS * 1000));
+    return () => timers.forEach(clearTimeout);
+  }, [ended, applyCue]);
 
   // Three layer groups with different lifetimes, so a 10 Hz tick never re-tessellates static geometry.
   const zoomBucket = viewState ? Math.round(viewState.zoom * 4) / 4 : 13;
@@ -374,17 +519,18 @@ export function App() {
         status={status}
         operator={OPERATOR}
         health={snap?.feedHealth ?? []}
-        frozen={FROZEN_AT !== undefined}
-        replay={replayT !== undefined}
+        frozen={FROZEN_AT !== undefined || LOCKED}
+        locked={LOCKED}
+        replay={replayT !== undefined && !PROBE}
         view={view}
         onView={setView}
         {...(snap ? { t: snap.t } : {})}
       />
       <div className="body">
       {view === "legacy" ? (
-        <LegacyLeftPanel tracks={legacy} sources={snap?.sources ?? []} onSelect={(id) => setUserSel({ entityId: id })} {...(selection ? { selectedId: selection.entityId } : {})} />
+        <LegacyLeftPanel tracks={legacy} sources={snap?.sources ?? []} onSelect={(id) => select({ entityId: id }, "track-list")} {...(selection ? { selectedId: selection.entityId } : {})} />
       ) : (
-        <LeftPanel cards={cards} sources={sources} onSelect={setUserSel} {...(selection ? { selection } : {})} />
+        <LeftPanel cards={cards} sources={sources} onSelect={(sel) => select(sel, "register")} {...(selection ? { selection } : {})} />
       )}
       <div className="map" ref={mapRef}>
         {viewState && (
@@ -397,8 +543,14 @@ export function App() {
             onHover={(info: PickingInfo) => setHovered((info.object as Glyph | undefined)?.entityId)}
             onClick={(info: PickingInfo) => {
               const o = info.object as Glyph | LegacyTrack | undefined;
-              if (o && "entityId" in o) setUserSel({ entityId: o.entityId, ...(o.kind === "candidate" ? { label: o.id.split(":")[1]! } : {}) });
-              else if (o && "trackQuality" in o) setUserSel({ entityId: o.id });
+              if (PROBE && probeClick.current) {
+                const contact = o && "entityId" in o ? o.entityId : o && "trackQuality" in o ? o.id : undefined;
+                const c = info.coordinate as [number, number] | undefined;
+                probeClick.current({ ...(contact ? { contact } : {}), ...(c ? { location: { lon: c[0], lat: c[1] } } : {}) });
+                return;
+              }
+              if (o && "entityId" in o) select({ entityId: o.entityId, ...(o.kind === "candidate" ? { label: o.id.split(":")[1]! } : {}) }, "map");
+              else if (o && "trackQuality" in o) select({ entityId: o.id }, "map");
             }}
             getCursor={({ isHovering }) => (isHovering ? "pointer" : "grab")}
             getTooltip={(info: PickingInfo) => tooltip(info, snap, view)}
@@ -407,8 +559,8 @@ export function App() {
         {view === "penumbra" && <Legend />}
         {view === "legacy" && <div className="legacy-banner">LEGACY VIEW · SAME DATA AS A FIELDED COP</div>}
         <Banner />
-        {replayT !== undefined && head !== undefined && snap && <ReplayBanner t={snap.t} head={head} onLive={() => setReplayT(undefined)} />}
-        {head !== undefined && logStart !== undefined && snap && (
+        {replayT !== undefined && head !== undefined && snap && !LOCKED && <ReplayBanner t={snap.t} head={head} onLive={() => setReplayT(undefined)} />}
+        {head !== undefined && logStart !== undefined && snap && !PROBE && (
           <Timeline
             logStart={logStart}
             head={head}
@@ -422,7 +574,19 @@ export function App() {
           />
         )}
         {SHOW_STATS && <Stats stats={stats.current} entities={snap?.entities.length ?? 0} />}
-        <Toast tone={toast?.tone ?? "ok"} {...(toast ? { message: toast.message } : {})} />
+        {!PROBE && <Toast tone={toast?.tone ?? "ok"} {...(toast ? { message: toast.message } : {})} />}
+        {DEMO && <Caption text={caption} />}
+        {PROBE && meta && (
+          <ProbeRunner
+            date={meta.date}
+            arp={meta.area.center}
+            recorder={recorder}
+            snapshotAt={(t) => store.snapshotAt(t)}
+            setView={setView}
+            setReplay={setReplayT}
+            registerClick={registerProbeClick}
+          />
+        )}
       </div>
       {view === "legacy" ? (
         <LegacyRightPanel marking={MARKING} {...((t) => (t ? { track: t } : {}))(legacy.find((t) => t.id === selection?.entityId))} />

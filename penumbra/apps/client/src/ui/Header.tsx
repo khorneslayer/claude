@@ -26,10 +26,12 @@ export function Header(props: {
   health: FeedHealth[];
   frozen: boolean;
   replay: boolean;
+  /** Probe / demo: the view is set by the script, not the operator. */
+  locked?: boolean;
   view: "penumbra" | "legacy";
   onView: (v: "penumbra" | "legacy") => void;
 }) {
-  const { store, status, operator, t, health, frozen, replay, view, onView } = props;
+  const { store, status, operator, t, health, frozen, replay, view, onView, locked = false } = props;
   const clock = store.clock;
   return (
     <header className="header">
@@ -42,14 +44,15 @@ export function Header(props: {
           </span>
         ))}
       </div>
-      <div className="viewswitch" role="group" aria-label="View (V)">
+      {!locked && <div className="viewswitch" role="group" aria-label="View (V)">
         <button className={view === "penumbra" ? "on" : ""} onClick={() => onView("penumbra")} aria-pressed={view === "penumbra"}>
           PENUMBRA
         </button>
         <button className={view === "legacy" ? "on legacy" : ""} onClick={() => onView("legacy")} aria-pressed={view === "legacy"}>
           LEGACY
         </button>
-      </div>
+      </div>}
+      {locked && <div className={`viewswitch locked`} aria-label="View">{view === "legacy" ? <button className="on legacy">LEGACY</button> : <button className="on">PENUMBRA</button>}</div>}
       <div className="operator" title="Operator id for RESOLVE / DEFER (?op=)">{operator}</div>
       <div className={`clock${replay ? " replay" : ""}`}>
         {replay && <span className="tag">REPLAY</span>}

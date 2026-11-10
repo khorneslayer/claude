@@ -1,0 +1,11 @@
+{
+  "name": "@penumbra/sim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@penumbra/core": "workspace:*",
+    "yaml": "2.9.1"
+  }
+}

@@ -50,3 +50,24 @@ export function diamondIcon(color: RGB): IconDef {
   cache.set(id, def);
   return def;
 }
+
+/** Standard-colour filled symbol, as a fielded COP draws it (LEGACY view). */
+export function legacyIcon(sidc: string): IconDef {
+  const id = `legacy:${sidc}`;
+  const hit = cache.get(id);
+  if (hit) return hit;
+  const sym = new ms.Symbol(sidc, { size: 24, fill: true, strokeWidth: 3 });
+  const size = sym.getSize();
+  const anchor = sym.getAnchor();
+  const def: IconDef = {
+    id,
+    url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(sym.asSVG())}`,
+    width: Math.ceil(size.width),
+    height: Math.ceil(size.height),
+    anchorX: anchor.x,
+    anchorY: anchor.y,
+    mask: false,
+  };
+  cache.set(id, def);
+  return def;
+}

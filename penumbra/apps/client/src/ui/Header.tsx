@@ -18,8 +18,18 @@ export function feedChips(health: FeedHealth[]) {
 
 const SPEEDS = [0.5, 1, 2, 4, 8, 16];
 
-export function Header(props: { store: FeedStore; status: FeedStatus; operator: string; t?: number; health: FeedHealth[]; frozen: boolean }) {
-  const { store, status, operator, t, health, frozen } = props;
+export function Header(props: {
+  store: FeedStore;
+  status: FeedStatus;
+  operator: string;
+  t?: number;
+  health: FeedHealth[];
+  frozen: boolean;
+  replay: boolean;
+  view: "penumbra" | "legacy";
+  onView: (v: "penumbra" | "legacy") => void;
+}) {
+  const { store, status, operator, t, health, frozen, replay, view, onView } = props;
   const clock = store.clock;
   return (
     <header className="header">
@@ -32,8 +42,19 @@ export function Header(props: { store: FeedStore; status: FeedStatus; operator: 
           </span>
         ))}
       </div>
+      <div className="viewswitch" role="group" aria-label="View (V)">
+        <button className={view === "penumbra" ? "on" : ""} onClick={() => onView("penumbra")} aria-pressed={view === "penumbra"}>
+          PENUMBRA
+        </button>
+        <button className={view === "legacy" ? "on legacy" : ""} onClick={() => onView("legacy")} aria-pressed={view === "legacy"}>
+          LEGACY
+        </button>
+      </div>
       <div className="operator" title="Operator id for RESOLVE / DEFER (?op=)">{operator}</div>
-      <div className="clock">{t !== undefined ? formatClock(t) : "--:--:--Z"}</div>
+      <div className={`clock${replay ? " replay" : ""}`}>
+        {replay && <span className="tag">REPLAY</span>}
+        {t !== undefined ? formatClock(t) : "--:--:--Z"}
+      </div>
       {!frozen && (
         <div className="transport">
           <span className={`mode ${status === "live" ? "live" : ""}`}>{status === "live" ? "LIVE FEED" : status.toUpperCase()}</span>

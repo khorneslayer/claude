@@ -17,7 +17,8 @@ const { chromium } = require("playwright");
 const procs = [];
 const start = (cmd, args, cwd, ready, env = {}) =>
   new Promise((ok, fail) => {
-    const p = spawn(cmd, args, { cwd, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"] });
+    // Own process group, so the whole tree (tsx -> node) is stopped at the end.
+    const p = spawn(cmd, args, { cwd, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"], detached: true });
     procs.push(p);
     const timer = setTimeout(() => fail(new Error(`${args.join(" ")} did not start`)), 30000);
     const onData = (d) => ready.test(String(d)) && (clearTimeout(timer), ok());
@@ -25,11 +26,19 @@ const start = (cmd, args, cwd, ready, env = {}) =>
     p.stderr.on("data", onData);
     p.on("exit", (code) => fail(new Error(`${args.join(" ")} exited ${code}`)));
   });
-const stopAll = () => procs.forEach((p) => p.exitCode === null && p.kill("SIGTERM"));
+const stopAll = () =>
+  procs.forEach((p) => {
+    try {
+      process.kill(-p.pid, "SIGTERM");
+    } catch {
+      /* already gone */
+    }
+  });
 process.on("exit", stopAll);
 
-const FEED_PORT = "8791";
-const WEB_PORT = "5191";
+// Random ports, so a run never talks to a server left over from the previous one.
+const FEED_PORT = String(8800 + Math.floor(Math.random() * 400));
+const WEB_PORT = String(5200 + Math.floor(Math.random() * 400));
 let failed = false;
 const check = (ok, msg) => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${msg}`);
@@ -48,7 +57,7 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await page.goto(`http://127.0.0.1:${WEB_PORT}/`);
-  await page.waitForFunction(() => window.__penumbra?.model, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__penumbra?.model?.glyphs.length > 0, null, { timeout: 30000 });
 
   const read = () => page.evaluate(() => ({ status: window.__penumbra.status, t: window.__penumbra.snap.t, seq: window.__penumbra.snap.logSeq, glyphs: window.__penumbra.model.glyphs.length, stats: { ...window.__penumbra.stats } }));
   const a = await read();
@@ -82,10 +91,61 @@ try {
   const log = await (await fetch(`http://127.0.0.1:${FEED_PORT}/log.jsonl`)).text();
   const op = log.trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.kind === "operator_action" && e.operatorId === "OP-1");
   check(op?.value === "hobbyist", "the server's append-only log records OP-1's decision");
-  await page.keyboard.press("d");
-  await page.waitForTimeout(500);
-  const toast2 = await page.locator(".toast").innerText().catch(() => "");
-  check(!/deferred/.test(toast2), "D does nothing once CTR-004 is resolved");
+  // D must be refused while CTR-004 stands resolved (a later contrary call may legitimately reopen it).
+  const statusNow = await page.evaluate(() => window.__penumbra.snap.contradictions.find((c) => c.id === "CTR-004")?.status);
+  if (statusNow === "resolved") {
+    await page.keyboard.press("d");
+    await page.waitForTimeout(500);
+    const toast2 = await page.locator(".toast").innerText().catch(() => "");
+    check(!/deferred/.test(toast2), "D does nothing once CTR-004 is resolved");
+  } else {
+    console.log(`      (CTR-004 already ${statusNow}: a contrary call arrived after the decision; D check skipped)`);
+  }
+
+  // M4: replay from a timeline mark, then back to live. Pause first so the marks stand still.
+  if (await page.evaluate(() => window.__penumbra.store.clock.playing)) await page.keyboard.press("Space");
+  await page.waitForFunction(() => !window.__penumbra.store.clock.playing, null, { timeout: 5000 });
+  // The live status before replay: resolved, or reopened if a contrary call arrived after OP-1's decision.
+  const liveCtr = await page.evaluate(() => window.__penumbra.snap.contradictions.find((c) => c.id === "CTR-004")?.status);
+  await page.locator('.tl-controls').getByRole("button", { name: "5M", exact: true }).click();
+  await page.locator('.tl-mark.contradiction[aria-label*="CTR-004 opened"]').click();
+  const replay = await page.evaluate(() => ({
+    replayT: window.__penumbra.replayT,
+    t: window.__penumbra.snap.t,
+    head: window.__penumbra.head,
+    ctr: window.__penumbra.snap.contradictions.find((c) => c.id === "CTR-004")?.status,
+  }));
+  check(replay.replayT !== undefined && replay.t < replay.head, `clicking the CTR-004 mark replays that moment (${JSON.stringify(replay)})`);
+  check(replay.ctr === "unresolved", `the replay shows CTR-004 as it stood then: ${replay.ctr} (resolved later)`);
+  check(await page.locator(".replay-banner").isVisible(), "replay banner is shown");
+  check(await page.locator(".actions .resolve").isDisabled(), "actions are disabled during replay");
+  await page.keyboard.press("End");
+  await page
+    .waitForFunction(() => window.__penumbra.replayT === undefined, null, { timeout: 10000 })
+    .catch(() => {});
+  const back = await page.evaluate(() => ({
+    replayT: window.__penumbra.replayT,
+    ctr: window.__penumbra.snap.contradictions.find((c) => c.id === "CTR-004")?.status,
+    t: window.__penumbra.snap.t,
+    head: window.__penumbra.head,
+    ops: window.__penumbra.snap.operatorActions.map((a) => `${a.operatorId}:${a.action}:${a.t}`),
+    active: document.activeElement?.className,
+  }));
+  check(back.replayT === undefined && back.t === back.head && back.ctr === liveCtr, `End returns to the live picture (CTR-004 ${back.ctr} again)`);
+
+  // M4: LEGACY view and back.
+  await page.keyboard.press("v");
+  await page.waitForFunction(() => window.__penumbra.view === "legacy" && window.__penumbra.legacy?.length > 0, null, { timeout: 10000 }).catch(() => {});
+  const legacyText = await page.locator(".panel.left").innerText();
+  const legacy = await page.evaluate(() => ({ view: window.__penumbra.view, ids: window.__penumbra.legacy.map((t) => t.id) }));
+  check(legacy.view === "legacy" && /TRACK LIST/i.test(legacyText), "V switches to the LEGACY view with a track list");
+  check(legacy.ids.includes("TRK-1155") && !legacy.ids.some((id) => id.includes("CAND")), "LEGACY shows one fused track per contact");
+  await page.locator(".tracks tr", { hasText: "TRK-1155" }).click();
+  check(/Track quality\s*\d+ \/ 15/i.test(await page.locator(".panel.right").innerText()), "LEGACY track details show track quality");
+  await page.keyboard.press("v");
+  await page.waitForFunction(() => window.__penumbra.view === "penumbra", null, { timeout: 10000 }).catch(() => {});
+  await page.locator(".panel.left .panel-title.alert").waitFor({ timeout: 10000 }).catch(() => {});
+  check(/CONTRADICTION REGISTER/i.test(await page.locator(".panel.left").innerText()), "V switches back to PENUMBRA");
 
   check(errors.length === 0, `no page errors${errors.length ? `: ${errors.join("; ")}` : ""}`);
   await browser.close();

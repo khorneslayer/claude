@@ -1,11 +1,15 @@
 import { MapView, WebMercatorViewport, type MapViewState, type PickingInfo } from "@deck.gl/core";
 import DeckGL from "@deck.gl/react";
-import { formatElapsed, type PictureSnapshot } from "@penumbra/core";
+import { clockToMillis, formatElapsed, type Millis, type PictureSnapshot } from "@penumbra/core";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { connectLive } from "./feed/live";
 import { startOffline } from "./feed/offline";
 import { FeedStore } from "./feed/store";
-import { buildCoverageLayers, buildDynamicLayers, buildStaticLayers } from "./map/layers";
+import { buildCoverageLayers, buildDynamicLayers, buildLegacyLayers, buildStaticLayers } from "./map/layers";
+import { buildLegacyModel, type LegacyTrack } from "./model/legacy";
+import { timelineMarks } from "./model/timeline";
+import { LegacyLeftPanel, LegacyRightPanel } from "./ui/LegacyPanels";
+import { ReplayBanner, Timeline, type TimelineWindow } from "./ui/Timeline";
 import { boundsAround, computeCoverageMask, coverageKey, LOST } from "./model/coverage";
 import { defaultSelection, provenance, reconcileSelection, registerCards, sourceRows, type Lookups, type Selection } from "./model/panels";
 import { placeLabels } from "./model/place";
@@ -28,6 +32,8 @@ import { Stats } from "./ui/Stats";
  *   ?stats               fps meter and per-tick timings
  *   ?op=OP-3             operator id for RESOLVE / DEFER (default OP-1)
  *   ?scripted            offline: keep the scenario's scripted decisions after playFrom
+ *   ?view=legacy         open in the LEGACY view (toggle with V)
+ *   ?replay=14:36:00     open replaying that moment (scrub with the timeline, arrow keys; End returns to live)
  */
 const params = new URLSearchParams(window.location.search);
 const FROZEN_AT = params.get("t") ?? undefined;
@@ -39,11 +45,24 @@ const OPERATOR = params.get("op") ?? "OP-1";
 const SCRIPTED = params.has("scripted");
 /** Mock releasability marking (slide 6, item 08): visible without opening a dialogue. */
 const MARKING = "EXERCISE · SYNTHETIC DATA · REL DEU/NLD (MOCK)";
+export type ViewMode = "penumbra" | "legacy";
 
 export function App() {
   const store = useMemo(() => new FeedStore(), []);
   const status = useSyncExternalStore(store.subscribe, () => store.status);
-  const [snap, setSnap] = useState<PictureSnapshot>();
+  const [liveSnap, setLiveSnap] = useState<PictureSnapshot>();
+  const version = useSyncExternalStore(store.subscribe, store.getVersion);
+  // Replay: undefined = following the live head.
+  const [replayT, setReplayT] = useState<Millis>();
+  const [view, setView] = useState<ViewMode>(params.get("view") === "legacy" ? "legacy" : "penumbra");
+  const [tlWindow, setTlWindow] = useState<TimelineWindow>("15m");
+  // The picture on screen: live, or exactly as it stood at the replay moment.
+  const snap = useMemo(
+    () => (replayT !== undefined && liveSnap ? store.snapshotAt(Math.min(replayT, liveSnap.t)) : liveSnap),
+    // A replay only changes when the moment or the log changes, not on every live tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [replayT, replayT === undefined ? liveSnap : version, store],
+  );
   const [hovered, setHovered] = useState<string>();
   const booted = useRef(false);
   const mapRef = useRef<HTMLDivElement>(null);
@@ -101,7 +120,7 @@ export function App() {
       const next = store.evaluate(t);
       stats.current.evalMs = performance.now() - t0;
       stats.current.ticks++;
-      setSnap(next);
+      setLiveSnap(next);
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -120,6 +139,36 @@ export function App() {
   }, [store]);
 
   const meta = store.meta;
+  const replayParamDone = useRef(false);
+  useEffect(() => {
+    const at = params.get("replay");
+    if (!at || !meta || replayParamDone.current) return;
+    replayParamDone.current = true;
+    setReplayT(clockToMillis(meta.date, at));
+  }, [meta]);
+
+  // Replay keys: arrows step back/forward (Shift = 1 min), End or Escape returns to live. V switches view.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.metaKey || e.ctrlKey) return;
+      const head = liveSnap?.t;
+      if (head === undefined) return;
+      const step = e.shiftKey ? 60_000 : 5_000;
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        e.preventDefault();
+        const from = replayT ?? head;
+        const next = from + (e.key === "ArrowLeft" ? -step : step);
+        const start = store.logRange?.start ?? head;
+        setReplayT(next >= head ? undefined : Math.max(start, next));
+      } else if (e.key === "End" || e.key === "Escape") {
+        setReplayT(undefined);
+      } else if (e.key === "v" || e.key === "V") {
+        setView((v) => (v === "legacy" ? "penumbra" : "legacy"));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [liveSnap?.t, replayT, store]);
   const bounds = useMemo(() => (meta ? boundsAround(meta.area.center, 10) : undefined), [meta]);
   const model = useMemo(() => {
     if (!snap) return undefined;
@@ -130,11 +179,11 @@ export function App() {
   }, [snap, store]);
   // Inspection hook for automated checks (screenshots, smoke tests).
   useEffect(() => {
-    (window as unknown as { __penumbra?: unknown }).__penumbra = { snap, model, status, head: store.clock?.head, store, stats: stats.current };
-  }, [snap, model, status, store]);
+    (window as unknown as { __penumbra?: unknown }).__penumbra = { snap, model, status, head: store.clock?.head, store, stats: stats.current, view, replayT };
+  }, [snap, model, status, store, view, replayT]);
   useEffect(() => {
     const w = window as unknown as { __penumbra?: Record<string, unknown> };
-    if (w.__penumbra) Object.assign(w.__penumbra, { selection, prov, cards });
+    if (w.__penumbra) Object.assign(w.__penumbra, { selection, prov, cards, legacy, setReplayT, setView });
   });
 
   // Label anchor for lost coverage: the lost cell nearest the centre, nudged into the lost area.
@@ -204,6 +253,28 @@ export function App() {
     return placeLabels(items, project, model.glyphs.map((g) => ({ position: g.position, radius: 22 })), flagBoxes, { width: vp.width, height: vp.height });
   }, [model, viewState, mapSize]);
 
+  // LEGACY view model and its label placement.
+  const legacy = useMemo(() => (snap && view === "legacy" ? buildLegacyModel(snap) : []), [snap, view]);
+  const legacyPlacement = useMemo(() => {
+    if (view !== "legacy" || !viewState || !mapSize) return undefined;
+    const vp = new WebMercatorViewport({ ...viewState, ...mapSize });
+    const project = (p: [number, number]) => vp.project(p) as [number, number];
+    return placeLabels(
+      legacy.map((t) => ({ id: t.id, position: t.position, lines: t.label, priority: 3 })),
+      project,
+      legacy.map((t) => ({ position: t.position, radius: 16 })),
+      [],
+      { width: vp.width, height: vp.height },
+    );
+  }, [legacy, view, viewState, mapSize]);
+
+  // Timeline marks: the moments worth jumping back to.
+  const marks = useMemo(
+    () => timelineMarks(store.log, liveSnap),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [version, liveSnap?.contradictions.length, liveSnap?.operatorActions.length, liveSnap?.flags.length, store],
+  );
+
   // Selection: what the provenance panel shows. Until the operator picks something,
   // it follows the newest open contradiction's leading candidate (slide 7).
   const [userSel, setUserSel] = useState<Selection>();
@@ -211,7 +282,13 @@ export function App() {
   const lookups: Lookups = useMemo(() => ({ obs: store.lookupObs, verdict: store.lookupVerdict }), [store]);
   const cards = useMemo(() => (snap ? registerCards(snap, lookups) : []), [snap, lookups]);
   const sources = useMemo(() => (snap ? sourceRows(snap) : []), [snap]);
-  const prov = useMemo(() => (snap && selection ? provenance(selection, snap, lookups) : undefined), [snap, selection, lookups]);
+  const prov = useMemo(() => {
+    if (!snap || !selection) return undefined;
+    const p = provenance(selection, snap, lookups);
+    // Decisions are only taken at the live head; a replay is for looking back.
+    if (p && replayT !== undefined) p.action = { ...p.action, canResolve: false, canDefer: false, hint: "Replay: return to live (End) to act." };
+    return p;
+  }, [snap, selection, lookups, replayT]);
   const selectedGlyph = selection ? (selection.label ? `${selection.entityId}:${selection.label}` : selection.entityId) : undefined;
 
   const [busy, setBusy] = useState(false);
@@ -278,13 +355,37 @@ export function App() {
     stats.current.layersMs = performance.now() - t0;
     return out;
   }, [model, placement, hovered, selectedGlyph]);
-  const layers = useMemo(() => [...coverageLayers, ...staticLayers, ...dynamicLayers], [coverageLayers, staticLayers, dynamicLayers]);
+  const legacyLayers = useMemo(
+    () => (view === "legacy" ? buildLegacyLayers(legacy, legacyPlacement, selection?.entityId) : []),
+    [view, legacy, legacyPlacement, selection?.entityId],
+  );
+  // LEGACY draws no coverage, no uncertainty and no flags: only fused tracks on the basemap.
+  const layers = useMemo(
+    () => (view === "legacy" ? [...staticLayers, ...legacyLayers] : [...coverageLayers, ...staticLayers, ...dynamicLayers]),
+    [view, coverageLayers, staticLayers, dynamicLayers, legacyLayers],
+  );
+  const head = liveSnap?.t;
+  const logStart = store.logRange?.start;
 
   return (
     <div className="app">
-      <Header store={store} status={status} operator={OPERATOR} health={snap?.feedHealth ?? []} frozen={FROZEN_AT !== undefined} {...(snap ? { t: snap.t } : {})} />
+      <Header
+        store={store}
+        status={status}
+        operator={OPERATOR}
+        health={snap?.feedHealth ?? []}
+        frozen={FROZEN_AT !== undefined}
+        replay={replayT !== undefined}
+        view={view}
+        onView={setView}
+        {...(snap ? { t: snap.t } : {})}
+      />
       <div className="body">
-      <LeftPanel cards={cards} sources={sources} onSelect={setUserSel} {...(selection ? { selection } : {})} />
+      {view === "legacy" ? (
+        <LegacyLeftPanel tracks={legacy} sources={snap?.sources ?? []} onSelect={(id) => setUserSel({ entityId: id })} {...(selection ? { selectedId: selection.entityId } : {})} />
+      ) : (
+        <LeftPanel cards={cards} sources={sources} onSelect={setUserSel} {...(selection ? { selection } : {})} />
+      )}
       <div className="map" ref={mapRef}>
         {viewState && (
           <DeckGL
@@ -295,28 +396,49 @@ export function App() {
             layers={layers}
             onHover={(info: PickingInfo) => setHovered((info.object as Glyph | undefined)?.entityId)}
             onClick={(info: PickingInfo) => {
-              const g = info.object as Glyph | undefined;
-              if (g && "entityId" in g) setUserSel({ entityId: g.entityId, ...(g.kind === "candidate" ? { label: g.id.split(":")[1]! } : {}) });
+              const o = info.object as Glyph | LegacyTrack | undefined;
+              if (o && "entityId" in o) setUserSel({ entityId: o.entityId, ...(o.kind === "candidate" ? { label: o.id.split(":")[1]! } : {}) });
+              else if (o && "trackQuality" in o) setUserSel({ entityId: o.id });
             }}
             getCursor={({ isHovering }) => (isHovering ? "pointer" : "grab")}
-            getTooltip={(info: PickingInfo) => tooltip(info, snap)}
+            getTooltip={(info: PickingInfo) => tooltip(info, snap, view)}
           />
         )}
-        <Legend />
+        {view === "penumbra" && <Legend />}
+        {view === "legacy" && <div className="legacy-banner">LEGACY VIEW · SAME DATA AS A FIELDED COP</div>}
         <Banner />
+        {replayT !== undefined && head !== undefined && snap && <ReplayBanner t={snap.t} head={head} onLive={() => setReplayT(undefined)} />}
+        {head !== undefined && logStart !== undefined && snap && (
+          <Timeline
+            logStart={logStart}
+            head={head}
+            t={snap.t}
+            replaying={replayT !== undefined}
+            marks={marks}
+            window={tlWindow}
+            onWindow={setTlWindow}
+            onScrub={(t) => setReplayT(t)}
+            onLive={() => setReplayT(undefined)}
+          />
+        )}
         {SHOW_STATS && <Stats stats={stats.current} entities={snap?.entities.length ?? 0} />}
         <Toast tone={toast?.tone ?? "ok"} {...(toast ? { message: toast.message } : {})} />
       </div>
-      <RightPanel marking={MARKING} busy={busy} onResolve={() => void act("resolve")} onDefer={() => void act("defer")} {...(prov ? { view: prov } : {})} />
+      {view === "legacy" ? (
+        <LegacyRightPanel marking={MARKING} {...((t) => (t ? { track: t } : {}))(legacy.find((t) => t.id === selection?.entityId))} />
+      ) : (
+        <RightPanel marking={MARKING} busy={busy} onResolve={() => void act("resolve")} onDefer={() => void act("defer")} {...(prov ? { view: prov } : {})} />
+      )}
       </div>
     </div>
   );
 }
 
-function tooltip(info: PickingInfo, snap: PictureSnapshot | undefined) {
-  const o = info.object as Glyph | FlagMarker | undefined;
+function tooltip(info: PickingInfo, snap: PictureSnapshot | undefined, view: ViewMode) {
+  const o = info.object as Glyph | FlagMarker | LegacyTrack | undefined;
   if (!o || !snap) return null;
   const style = { background: "rgba(8,12,26,0.95)", border: "1px solid #1e2748", color: "#dfe6f3", padding: "8px 10px" };
+  if ("trackQuality" in o) return view === "legacy" ? { html: `<div class="tooltip"><b>${o.id}</b> · ${o.label[1]}<br/>TQ ${o.trackQuality}/15</div>`, style } : null;
   if ("spokes" in o) return { html: `<div class="tooltip">${o.label.join("<br/>")}<br/>flags only; confidence counts the burst as one vote</div>`, style };
   const entityId = o.entityId;
   const e = snap.entities.find((x) => x.id === entityId);

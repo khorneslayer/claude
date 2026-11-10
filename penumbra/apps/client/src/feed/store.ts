@@ -33,6 +33,8 @@ export class FeedStore {
   private readonly obs = new Map<string, ObservationEvent>();
   private readonly verdicts = new Map<string, VerificationEvent>();
   private projector = new Projector();
+  /** Separate projector for replay: steps forward while the scrubber moves forward, rebuilds when it moves back. */
+  private replay: { projector: Projector; next: number } | undefined;
   private version = 0;
   private readonly listeners = new Set<() => void>();
   source: FeedSource | undefined;
@@ -70,6 +72,7 @@ export class FeedStore {
       this.obs.clear();
       this.verdicts.clear();
       this.projector = new Projector();
+      this.replay = undefined;
     }
     for (const e of events) {
       this.events.push(e);
@@ -93,6 +96,24 @@ export class FeedStore {
     if (!c || !this.meta) return undefined;
     const t = c.playing ? c.head + (nowPerf - this.clockAt) * c.speed : c.head;
     return Math.max(this.projector.appliedT, Math.min(this.meta.end, t));
+  }
+
+  /**
+   * The picture exactly as it stood at a past moment `t`, rebuilt from the log
+   * the client holds: events after `t`, including later operator decisions,
+   * are not seen. No server round trip.
+   */
+  snapshotAt(t: Millis): PictureSnapshot {
+    let r = this.replay;
+    if (!r || r.projector.appliedT > t) r = this.replay = { projector: new Projector(), next: 0 };
+    while (r.next < this.events.length && this.events[r.next]!.t <= t) r.projector.apply(this.events[r.next++]!);
+    return r.projector.evaluate(t);
+  }
+
+  /** First and last moment the log covers. */
+  get logRange(): { start: Millis; end: Millis } | undefined {
+    if (this.events.length === 0) return undefined;
+    return { start: this.events[0]!.t, end: this.events[this.events.length - 1]!.t };
   }
 
   /** The live picture at `t` (never before the last applied event). */

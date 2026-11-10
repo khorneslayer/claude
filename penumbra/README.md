@@ -7,6 +7,7 @@ A confidence and decision-support layer above sensor fusion. It renders confiden
 - M2 map rendering notes and screenshots: [docs/M2-NOTES.md](docs/M2-NOTES.md)
 - M3 panels and operator actions: [docs/M3-NOTES.md](docs/M3-NOTES.md)
 - EDDB basemap: source, georeference, licence note: [docs/BASEMAP.md](docs/BASEMAP.md)
+- M4 time scrubber and LEGACY view: [docs/M4-NOTES.md](docs/M4-NOTES.md)
 - Dependencies and licences: [DEPENDENCIES.md](DEPENDENCIES.md)
 
 **All data is synthetic.** The airport layout is traced from R. Aehnelt's EDDB chart (Wikimedia Commons, CC); see [docs/BASEMAP.md](docs/BASEMAP.md). Not for navigation.
@@ -17,8 +18,8 @@ A confidence and decision-support layer above sensor fusion. It renders confiden
 |---|---|---|
 | M1 | data model, confidence engine, scenario engine, WS stream, tests | done, reviewed |
 | M2 | map rendering of the four conditions + deception flag | done |
-| M3 | panels + RESOLVE / DEFER | done, awaiting review |
-| M4 | time scrubber + LEGACY toggle | |
+| M3 | panels + RESOLVE / DEFER | done |
+| M4 | time scrubber + LEGACY toggle | done, awaiting review |
 | M5 | instrumentation, legibility probe, demo / capture mode | |
 
 ## Quickstart
@@ -38,7 +39,7 @@ pnpm smoke          # live-mode browser smoke test
 pnpm build          # static client build (offline mode works without a server)
 ```
 
-Client URL options: `?t=14:41:22` (freeze a moment), `?mode=offline`, `?speed=4`, `?op=OP-3`, `?scripted`, `?stress=500&stats` (performance check). Keys: space play/pause, `R` resolve, `D` defer. See [docs/M2-NOTES.md](docs/M2-NOTES.md).
+Client URL options: `?t=14:41:22` (freeze a moment), `?mode=offline`, `?speed=4`, `?op=OP-3`, `?scripted`, `?stress=500&stats` (performance check). `?view=legacy`, `?replay=14:36:00`. Keys: space play/pause, `R` resolve, `D` defer, `V` PENUMBRA / LEGACY, ← → replay (Shift = 1 min), End back to live. See [docs/M2-NOTES.md](docs/M2-NOTES.md).
 
 ## Layout
 

@@ -9,7 +9,8 @@ import { C, rgba, type RGB } from "../theme";
 import { AREAS, grid, LABELS, RUNWAYS, TAXIWAY_WIDTH_M, TAXIWAYS, type Area } from "./basemap";
 import { ConfidenceRingLayer } from "./ConfidenceRingLayer";
 import { HATCH_MAPPING, hatchAtlas } from "./hatch";
-import { diamondIcon, symbolIcon } from "./symbols";
+import { diamondIcon, legacyIcon, symbolIcon } from "./symbols";
+import type { LegacyTrack } from "../model/legacy";
 
 const FONT = 'ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace';
 const dashed = new PathStyleExtension({ dash: true });
@@ -417,4 +418,60 @@ export function buildDynamicLayers({ model, placement, hoveredId, selectedId }: 
 
 export function colorOf(c: RGB, a = 1): string {
   return `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${a})`;
+}
+
+/** LEGACY view: one standard symbol per fused track, uniform, with id and best classification. */
+export function buildLegacyLayers(tracks: LegacyTrack[], placement: Map<string, Placement | null> | undefined, selectedId?: string): Layer[] {
+  const place = (id: string) => placement?.get(id) ?? DEFAULT_PLACEMENT;
+  const placeKey = placement ? [...placement].map(([k, v]) => (v ? `${k}:${v.anchor}${v.line1.join(",")}` : `${k}:-`)).join("|") : "";
+  const labelled = tracks.filter((t) => placement?.get(t.id) !== null || t.id === selectedId);
+  return [
+    new ScatterplotLayer<LegacyTrack>({
+      id: "legacy-selection",
+      data: tracks.filter((t) => t.id === selectedId),
+      getPosition: (d) => d.position,
+      filled: false,
+      stroked: true,
+      getLineColor: rgba(C.text, 230),
+      lineWidthUnits: "pixels",
+      getLineWidth: 1.5,
+      radiusUnits: "pixels",
+      getRadius: 24,
+    }),
+    new IconLayer<LegacyTrack>({
+      id: "legacy-symbols",
+      data: tracks,
+      getPosition: (d) => d.position,
+      getIcon: (d) => legacyIcon(d.sidc),
+      getSize: 28,
+      sizeUnits: "pixels",
+      pickable: true,
+    }),
+    new TextLayer<LegacyTrack>({
+      id: "legacy-labels-1",
+      data: labelled,
+      getText: (d) => d.label[0]!,
+      getPosition: (d) => d.position,
+      getColor: rgba(C.text, 255),
+      getSize: 13,
+      getTextAnchor: (d) => place(d.id).anchor,
+      getAlignmentBaseline: "bottom",
+      getPixelOffset: (d) => place(d.id).line1,
+      updateTriggers: { getTextAnchor: placeKey, getPixelOffset: placeKey },
+      ...text,
+    }),
+    new TextLayer<LegacyTrack>({
+      id: "legacy-labels-2",
+      data: labelled,
+      getText: (d) => d.label[1]!,
+      getPosition: (d) => d.position,
+      getColor: rgba(C.text, 200),
+      getSize: 12,
+      getTextAnchor: (d) => place(d.id).anchor,
+      getAlignmentBaseline: "top",
+      getPixelOffset: (d) => place(d.id).line2,
+      updateTriggers: { getTextAnchor: placeKey, getPixelOffset: placeKey },
+      ...text,
+    }),
+  ];
 }

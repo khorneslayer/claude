@@ -26,7 +26,9 @@ export function Banner() {
     <div className="banner">
       <b>EXERCISE · SYNTHETIC DATA</b>
       <br />
-      SYNTHETIC BASEMAP · NOT FOR NAVIGATION
+      LAYOUT © R. AEHNELT · WIKIMEDIA (CC)
+      <br />
+      NOT FOR NAVIGATION
     </div>
   );
 }

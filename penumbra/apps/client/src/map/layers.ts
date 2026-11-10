@@ -6,7 +6,7 @@ import type { Bounds } from "../model/coverage";
 import type { Placement } from "../model/place";
 import type { Envelope, FlagMarker, Glyph, Link, LonLat, RenderModel, Wedge } from "../model/view";
 import { C, rgba, type RGB } from "../theme";
-import { AREAS, BOUNDARY, grid, RUNWAYS } from "./basemap";
+import { AREAS, grid, LABELS, RUNWAYS, TAXIWAY_WIDTH_M, TAXIWAYS, type Area } from "./basemap";
 import { ConfidenceRingLayer } from "./ConfidenceRingLayer";
 import { HATCH_MAPPING, hatchAtlas } from "./hatch";
 import { diamondIcon, symbolIcon } from "./symbols";
@@ -108,37 +108,43 @@ export function buildCoverageLayers(cov: Coverage, bounds: Bounds, zoom: number,
   return layers;
 }
 
-/** Synthetic basemap. Build once per bounds. */
-export function buildStaticLayers(bounds: Bounds): Layer[] {
-  const layers: Layer[] = [];
-  layers.push(
+/** EDDB basemap traced from the R. Aehnelt chart. Build once per bounds. */
+/** Zoom at which each class of basemap label appears, so the picture is never buried in chart text. */
+const LABEL_MIN_ZOOM = { major: 0, runway: 12.5, minor: 14.2, taxiway: 14.8 } as const;
+
+export function buildStaticLayers(bounds: Bounds, zoom = 13): Layer[] {
+  const fill = (a: Area) =>
+    a.kind === "apron" ? rgba(C.apron, 255) : a.kind === "terminal" ? rgba(C.building, 230) : a.kind === "building" ? rgba(C.building, 170) : rgba(C.apron, 0);
+  const ends = RUNWAYS.flatMap((r) => r.ends);
+  return [
     new PathLayer<LonLat[]>({
       id: "grid",
       data: grid(bounds),
       getPath: (d) => d,
-      getColor: rgba(C.grid, 110),
+      getColor: rgba(C.grid, 70),
       widthUnits: "pixels",
       getWidth: 1,
     }),
-    new PolygonLayer({
-      id: "areas",
-      data: AREAS,
+    new PolygonLayer<Area>({
+      id: "aprons",
+      data: AREAS.filter((a) => a.kind === "apron"),
       getPolygon: (d) => d.polygon,
-      getFillColor: (d) => (d.kind === "event" ? rgba(C.terrain, 200) : d.kind === "building" ? rgba(C.runway, 70) : rgba(C.terrain, 160)),
-      getLineColor: (d) => (d.kind === "event" ? rgba(C.dim, 110) : rgba(C.runway, 150)),
+      getFillColor: fill,
+      getLineColor: rgba(C.taxiway, 255),
       lineWidthUnits: "pixels",
       getLineWidth: 1,
       stroked: true,
     }),
-    new PathLayer<LonLat[], PathStyleExtensionProps<LonLat[]>>({
-      id: "boundary",
-      data: [BOUNDARY],
-      getPath: (d) => d,
-      getColor: rgba(C.runway, 140),
-      widthUnits: "pixels",
-      getWidth: 1,
-      getDashArray: [4, 4],
-      extensions: [dashed],
+    new PathLayer({
+      id: "taxiways",
+      data: TAXIWAYS,
+      getPath: (d) => d.path,
+      getColor: rgba(C.taxiway, 255),
+      widthUnits: "meters",
+      getWidth: TAXIWAY_WIDTH_M,
+      widthMinPixels: 1.5,
+      jointRounded: true,
+      capRounded: true,
     }),
     new PathLayer({
       id: "runways",
@@ -146,30 +152,69 @@ export function buildStaticLayers(bounds: Bounds): Layer[] {
       getPath: (d) => d.path,
       getColor: rgba(C.runway, 255),
       widthUnits: "meters",
-      getWidth: 60,
+      getWidth: (d) => d.widthM,
       widthMinPixels: 4,
       capRounded: false,
     }),
+    new PathLayer<{ path: LonLat[] }, PathStyleExtensionProps<{ path: LonLat[] }>>({
+      id: "runway-centrelines",
+      data: RUNWAYS,
+      getPath: (d) => d.path,
+      getColor: rgba(C.text, 70),
+      widthUnits: "pixels",
+      getWidth: 1,
+      getDashArray: [6, 6],
+      extensions: [dashed],
+    }),
+    new PolygonLayer<Area>({
+      id: "buildings",
+      data: AREAS.filter((a) => a.kind !== "apron"),
+      getPolygon: (d) => d.polygon,
+      getFillColor: fill,
+      getLineColor: (d) => (d.kind === "outline" ? rgba(C.dim, 150) : rgba(C.building, 255)),
+      getLineWidth: 1,
+      lineWidthUnits: "pixels",
+      stroked: true,
+    }),
+    new PathLayer<Area, PathStyleExtensionProps<Area>>({
+      id: "expocenter-outline",
+      data: AREAS.filter((a) => a.kind === "outline"),
+      getPath: (d) => d.polygon,
+      getColor: rgba(C.dim, 170),
+      widthUnits: "pixels",
+      getWidth: 1.2,
+      getDashArray: [5, 4],
+      extensions: [dashed],
+    }),
     new TextLayer({
-      id: "basemap-labels",
-      data: [
-        ...RUNWAYS.map((r) => ({ text: r.label, position: midpoint(r.path[0]!, r.path[1]!), angle: -20 })),
-        ...AREAS.filter((a) => a.label).map((a) => ({ text: a.label, position: a.polygon[0]!, angle: 0 })),
-      ],
-      getText: (d) => d.text,
-      getPosition: (d) => d.position,
-      getAngle: (d) => d.angle,
-      getColor: rgba(C.runway, 255),
-      getSize: 12,
-      getTextAnchor: "start",
-      getAlignmentBaseline: "bottom",
-      getPixelOffset: [0, -10],
+      id: "runway-designators",
+      data: ends,
+      getText: (d) => `${d.designator}\n${d.heading}`,
+      getPosition: (d) => d.outward,
+      getColor: rgba(C.text, 220),
+      getSize: 13,
+      lineHeight: 1.2,
+      background: true,
+      getBackgroundColor: rgba(C.bg, 230),
+      getBorderColor: rgba(C.runway, 255),
+      getBorderWidth: 1,
+      backgroundPadding: [5, 3, 5, 3],
       ...text,
       outlineWidth: 0,
     }),
-  );
-
-  return layers;
+    new TextLayer({
+      id: "basemap-labels",
+      data: LABELS.filter((l) => zoom >= LABEL_MIN_ZOOM[l.kind]),
+      getText: (d) => d.text,
+      getPosition: (d) => d.position,
+      getAngle: (d) => d.angle ?? 0,
+      getColor: (d) => (d.kind === "major" ? rgba(C.dim, 230) : d.kind === "runway" ? rgba(C.runway, 255) : d.kind === "taxiway" ? rgba(C.runway, 200) : rgba(C.runway, 230)),
+      getSize: (d) => (d.kind === "major" ? 12 : d.kind === "taxiway" ? 10 : 11),
+      getPixelOffset: (d) => (d.kind === "runway" ? [0, -10] : [0, 0]),
+      ...text,
+      outlineWidth: 2,
+    }),
+  ];
 }
 
 /** The picture itself: rebuilt every evaluation tick. */
@@ -368,10 +413,6 @@ export function buildDynamicLayers({ model, placement, hoveredId, selectedId }: 
   );
 
   return layers;
-}
-
-function midpoint(a: LonLat, b: LonLat): LonLat {
-  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 }
 
 export function colorOf(c: RGB, a = 1): string {

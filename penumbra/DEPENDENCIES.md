@@ -25,3 +25,9 @@ Checked against the installed packages (`pnpm licenses list`). There are no ITAR
 | @types/node, @types/ws | 26.6.6, 8.18.2 | MIT | type definitions |
 
 Transitive dev dependencies: 39 MIT, 4 Apache-2.0, 2 ISC, 1 BSD-3-Clause (source-map-js), and 3 MPL-2.0 (lightningcss and its platform binaries, pulled in by vitest's bundler). MPL-2.0 is file-level copyleft and dev-only here; nothing from it is shipped.
+
+## Data
+
+| Data | Source | Licence | Used for |
+|---|---|---|---|
+| EDDB airport layout (traced geometry in `apps/client/src/map/ber-layout.ts`) | "Airport Layout 08/2026", R. Aehnelt via Wikimedia Commons | Creative Commons; **confirm the exact version (BY-SA implies share-alike for the traced geometry) before external use** | basemap |

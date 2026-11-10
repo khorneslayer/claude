@@ -153,7 +153,7 @@ export function App() {
       }
     }
     if (!best) return undefined;
-    const anchor = destination(best, bearingDeg(meta.area.center, best), 900);
+    const anchor = destination(best, bearingDeg(meta.area.center, best), 350);
     const lostSource = snap.sources.find((s) => mask.lostSources.includes(s.id));
     return {
       position: [anchor.lon, anchor.lat] as [number, number],
@@ -164,7 +164,7 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [covKey, bounds, meta]);
 
-  // Fit the operating area (about 12 x 8 km around the scenario centre) to the map pane.
+  // Fit the airport (about 6 x 5 km around the ARP) to the map pane.
   const initialViewState = useMemo(() => {
     if (!meta || !mapSize) return undefined;
     const km = boundsAround(meta.area.center, 1);
@@ -174,8 +174,8 @@ export function App() {
     const { width, height } = mapSize;
     const fit = new WebMercatorViewport({ width, height }).fitBounds(
       [
-        [c.lon - 5.6 * kmLon, c.lat - 4.4 * kmLat],
-        [c.lon + 5.4 * kmLon, c.lat + 3.2 * kmLat],
+        [c.lon - 3.4 * kmLon, c.lat - 3.0 * kmLat],
+        [c.lon + 2.9 * kmLon, c.lat + 2.9 * kmLat],
       ],
       { padding: Math.min(40, width / 20) },
     );
@@ -257,8 +257,8 @@ export function App() {
   }, [act]);
 
   // Three layer groups with different lifetimes, so a 10 Hz tick never re-tessellates static geometry.
-  const staticLayers = useMemo(() => (bounds ? buildStaticLayers(bounds) : []), [bounds]);
   const zoomBucket = viewState ? Math.round(viewState.zoom * 4) / 4 : 13;
+  const staticLayers = useMemo(() => (bounds ? buildStaticLayers(bounds, zoomBucket) : []), [bounds, zoomBucket]);
   const sinceBucket = lostLabel && snap ? Math.floor((snap.t - lostLabel.since) / 1000) : 0;
   const coverageLayers = useMemo(() => {
     if (!snap || !bounds) return [];

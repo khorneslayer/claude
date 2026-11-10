@@ -5,7 +5,10 @@ export type RGBA = [number, number, number, number];
 export const C = {
   bg: [8, 12, 26] as RGB,
   grid: [36, 44, 78] as RGB,
-  runway: [58, 66, 140] as RGB,
+  runway: [70, 80, 165] as RGB,
+  taxiway: [34, 42, 82] as RGB,
+  apron: [20, 26, 50] as RGB,
+  building: [52, 62, 120] as RGB,
   terrain: [22, 28, 52] as RGB,
   text: [223, 230, 243] as RGB,
   dim: [138, 147, 168] as RGB,

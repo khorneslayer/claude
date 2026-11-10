@@ -6,9 +6,10 @@ A confidence and decision-support layer above sensor fusion. It renders confiden
 - M1 design and review notes (confidence maths, schema, decisions): [docs/M1-DESIGN.md](docs/M1-DESIGN.md)
 - M2 map rendering notes and screenshots: [docs/M2-NOTES.md](docs/M2-NOTES.md)
 - M3 panels and operator actions: [docs/M3-NOTES.md](docs/M3-NOTES.md)
+- EDDB basemap: source, georeference, licence note: [docs/BASEMAP.md](docs/BASEMAP.md)
 - Dependencies and licences: [DEPENDENCIES.md](DEPENDENCIES.md)
 
-**All data is synthetic.**
+**All data is synthetic.** The airport layout is traced from R. Aehnelt's EDDB chart (Wikimedia Commons, CC); see [docs/BASEMAP.md](docs/BASEMAP.md). Not for navigation.
 
 ## Status
 

@@ -31,7 +31,7 @@ Symbols are standard APP-6 / 2525 (milsymbol, monochrome outline). PENUMBRA modu
 - **Offline mode.** The same scenario compiles and plays in the browser, used when no feed server is reachable, or forced with `?mode=offline`. `?t=14:41:22` freezes a moment for screenshots and briefings.
 - **Layer groups with different lifetimes.** Basemap (once), coverage (on a status change or zoom step), picture (every tick). A tick costs about 1.3 ms of JS for the reference scenario.
 - **Label decluttering.** Greedy screen-space placement (right / left / above / below), avoiding glyphs, the flag box and screen edges. A low-priority label with no room is hidden and shown on hover. Contradicted and flagged labels always show.
-- **No MapLibre (deviation from the brief).** With no tile server allowed in Phase 0, MapLibre would render an empty map. The basemap is a handful of synthetic deck.gl shapes (runways, terminal, fan zone, 1 km grid), marked "SYNTHETIC BASEMAP · NOT FOR NAVIGATION". Add MapLibre when accredited offline tiles are provisioned. Nothing else changes.
+- **No MapLibre (deviation from the brief).** With no tile server allowed in Phase 0, MapLibre would render an empty map. The basemap is drawn as deck.gl vector layers. *Update:* it is now the real EDDB layout traced from the R. Aehnelt chart; see [BASEMAP.md](BASEMAP.md). Add MapLibre when accredited offline tiles are provisioned. Nothing else changes.
 
 ## URL parameters
 

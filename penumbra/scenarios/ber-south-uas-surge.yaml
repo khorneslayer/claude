@@ -7,6 +7,12 @@
 #
 # ALL DATA IS SYNTHETIC. Callsigns, sensors, callers and accounts are invented.
 #
+# Geography follows the EDDB "Airport Layout 08/2026" chart (R. Aehnelt,
+# Wikimedia Commons): runways 06L/24R (north) and 06R/24L (south), Terminal 1
+# between them, the public event at the ExpoCenter in the south-west.
+# Coordinates come from the chart's georeference in
+# apps/client/src/map/ber-layout.ts (pxToLatLon).
+#
 # Structure
 #   13:55 - 14:38:22  history: the system was already running when the demo opens
 #   14:38:22          live playback starts (3 minutes to the key frame)
@@ -27,7 +33,7 @@ window:
   end: "14:41:52"
 
 area:
-  center: [52.3620, 13.5000]
+  center: [52.3667, 13.5033]     # chart ARP N 52 22' 00" E 13 30' 12"
   label: EDDB / BER-SOUTH
 
 config:
@@ -79,52 +85,52 @@ sources:
     type: RF
     reliability: { alpha: 10, beta: 1 }        # 0.91
     halfLifeS: 300
-    position: [52.3920, 13.5050]
+    position: [52.3851, 13.5091]               # by Fire Station North
     coverageLayers: [uas]
     footprint:
-      circle: { radiusM: 6500 }
+      circle: { radiusM: 4300 }
       holes:
-        - polygon: [[52.3700, 13.5150], [52.3700, 13.5350], [52.3600, 13.5350], [52.3600, 13.5150]]   # terminal RF shadow
+        - polygon: [[52.3648, 13.5116], [52.3662, 13.5177], [52.3637, 13.5192], [52.3624, 13.5130]]   # RF shadow behind Terminal 1
   - id: RF-SENSE-C
     type: RF
     reliability: { alpha: 9, beta: 1 }         # 0.90
     halfLifeS: 300
-    position: [52.3600, 13.5000]
+    position: [52.3668, 13.5019]               # on the tower
     coverageLayers: [uas]
     footprint:
-      sector: { radiusM: 8000, fromDeg: 250, toDeg: 200 }   # everything except the SW wedge
+      sector: { radiusM: 8000, fromDeg: 232, toDeg: 205 }   # all round except a SW wedge shadowed by the maintenance hangars
   - id: RF-SENSE-S
     type: RF
     reliability: { alpha: 8.5, beta: 1.5 }     # 0.85
     halfLifeS: 300
-    position: [52.3350, 13.5300]
+    position: [52.3571, 13.5183]               # south of runway 06R/24L, east half
     coverageLayers: [uas]
     footprint:
-      circle: { radiusM: 5000 }
+      circle: { radiusM: 2500 }
   - id: RF-SENSE-W
     type: RF
     reliability: { alpha: 8.5, beta: 1.5 }     # 0.85
     halfLifeS: 300
-    position: [52.3850, 13.4300]
+    position: [52.3723, 13.4614]               # west of the 06L threshold
     coverageLayers: [uas]
     footprint:
-      circle: { radiusM: 5000 }
+      circle: { radiusM: 2500 }
   - id: RF-SENSE-E
     type: RF
     reliability: { alpha: 8.8, beta: 1.2 }     # 0.88
     halfLifeS: 300
-    position: [52.3700, 13.5800]
+    position: [52.3763, 13.5294]               # by business aviation / fuel depot
     coverageLayers: [uas]
     footprint:
-      circle: { radiusM: 5000 }
+      circle: { radiusM: 3500 }
   - id: RF-SENSE-SW
     type: RF
     reliability: { alpha: 9, beta: 1 }         # 0.90
     halfLifeS: 300
-    position: [52.3480, 13.4700]
+    position: [52.3478, 13.4736]               # south-west, beyond the 06R threshold
     coverageLayers: [uas]
     footprint:
-      sector: { center: [52.3600, 13.5000], radiusM: 8000, fromDeg: 195, toDeg: 255 }
+      circle: { radiusM: 3600 }
   - id: ADS-B-FEED
     type: ADSB
     label: ADS-B FEED
@@ -132,16 +138,16 @@ sources:
     halfLifeS: 30
     coverageLayers: [cooperative]
     footprint:
-      circle: { center: [52.3620, 13.5000], radiusM: 60000 }
+      circle: { center: [52.3667, 13.5033], radiusM: 60000 }
   - id: EO-1
     type: EO
-    label: EO-1 FAN ZONE
+    label: EO-1 EXPOCENTER
     reliability: { alpha: 8, beta: 2 }         # 0.80
     halfLifeS: 120
-    position: [52.3480, 13.4920]
+    position: [52.3563, 13.4764]               # camera over the ExpoCenter event
     coverageLayers: [uas]
     footprint:
-      circle: { radiusM: 1500 }
+      circle: { radiusM: 1000 }
   - id: CIV-CALL-LINE
     type: CIV_CALL
     label: CIV CALL LINE
@@ -154,32 +160,33 @@ sources:
     halfLifeS: 900
 
 tracks:
-  # TRK-1152: a drone seen in the west at the start of the shift, then lost.
+  # TRK-1152: a drone seen west of the 06L threshold at the start of the shift, then lost.
   trk-1152:
-    - { at: "13:56:00", lat: 52.3790, lon: 13.4300, altM: 90 }
-    - { at: "14:00:22", lat: 52.3760, lon: 13.4480, altM: 95 }
-  # TRK-1147: loitering over the fan zone south-west of the terminal.
+    - { at: "13:56:00", lat: 52.3699, lon: 13.4652, altM: 90 }
+    - { at: "14:00:22", lat: 52.3697, lon: 13.4682, altM: 95 }
+  # TRK-1147: loitering over the public event at the ExpoCenter.
   trk-1147:
-    - { at: "14:30:00", lat: 52.3500, lon: 13.4880, altM: 80 }
-    - { at: "14:33:00", lat: 52.3525, lon: 13.4960, altM: 85 }
-    - { at: "14:36:00", lat: 52.3490, lon: 13.5010, altM: 90 }
-    - { at: "14:39:00", lat: 52.3470, lon: 13.4930, altM: 85 }
-    - { at: "14:42:00", lat: 52.3510, lon: 13.4900, altM: 80 }
-  # TRK-1160: faint contact north-east, seen only by the degraded RF-SENSE-E.
+    - { at: "14:30:00", lat: 52.3565, lon: 13.4746, altM: 80 }
+    - { at: "14:33:00", lat: 52.3574, lon: 13.4774, altM: 85 }
+    - { at: "14:36:00", lat: 52.3566, lon: 13.4791, altM: 90 }
+    - { at: "14:39:00", lat: 52.3556, lon: 13.4761, altM: 85 }
+    - { at: "14:42:00", lat: 52.3566, lon: 13.4765, altM: 80 }
+  # TRK-1160: faint contact north-west of the 06L threshold, seen only by the degraded RF-SENSE-W.
   trk-1160:
-    - { at: "14:40:00", lat: 52.3830, lon: 13.5640, altM: 110 }
-    - { at: "14:42:00", lat: 52.3860, lon: 13.5560, altM: 110 }
+    - { at: "14:40:00", lat: 52.3774, lon: 13.4583, altM: 110 }
+    - { at: "14:42:00", lat: 52.3772, lon: 13.4601, altM: 110 }
   # Cooperative traffic
-  dlh4kt:                          # departure 25R (north runway), straight out on 250
-    - { at: "14:38:30", lat: 52.3830, lon: 13.5420, altM: 0 }
-    - { at: "14:39:20", lat: 52.3750, lon: 13.5060, altM: 300 }
-    - { at: "14:40:30", lat: 52.3553, lon: 13.4175, altM: 1200 }
-    - { at: "14:42:00", lat: 52.3149, lon: 13.2379, altM: 2400 }
-  ezy91hb:                         # arrival 25L (south runway) from the east, then rollout
-    - { at: "14:36:00", lat: 52.4094, lon: 13.7579, altM: 900 }
-    - { at: "14:39:50", lat: 52.3665, lon: 13.5640, altM: 0 }
-    - { at: "14:40:40", lat: 52.3597, lon: 13.5336, altM: 0 }
-    - { at: "14:41:52", lat: 52.3590, lon: 13.5300, altM: 0 }
+  dlh4kt:                          # departure 24R (runway north), straight out on 245
+    - { at: "14:38:30", lat: 52.3825, lon: 13.5333, altM: 0 }
+    - { at: "14:39:20", lat: 52.3745, lon: 13.4973, altM: 300 }
+    - { at: "14:40:30", lat: 52.3548, lon: 13.4087, altM: 1200 }
+    - { at: "14:42:00", lat: 52.3148, lon: 13.2288, altM: 2400 }
+  ezy91hb:                         # arrival 24L (runway south) from the east, rollout, M7, taxi to Ramp C
+    - { at: "14:36:00", lat: 52.4056, lon: 13.7196, altM: 900 }
+    - { at: "14:39:50", lat: 52.3625, lon: 13.5259, altM: 0 }
+    - { at: "14:40:40", lat: 52.3590, lon: 13.5098, altM: 0 }
+    - { at: "14:41:05", lat: 52.3616, lon: 13.5109, altM: 0 }
+    - { at: "14:41:52", lat: 52.3638, lon: 13.5167, altM: 0 }
 
 beats:
   # ---------------------------------------------------------------- history
@@ -188,42 +195,42 @@ beats:
     periodic: { source: RF-SENSE-W, entity: TRK-1152, class: UAS_SMALL, track: trk-1152, until: "14:00:22", everyS: 5, jitterS: 0.8, sigmaM: 50, quality: 0.6 }
 
   - at: "14:20:00"
-    note: Social post claims a drone over the stadium; it is false
+    note: Social post claims a drone over the ExpoCenter; it is false
     report:
       id: soc-stadium
       source: SOCIAL-SCRAPE
       origin: SOC-ACCT-044
       entity: TRK-1139
       class: UAS_REPORTED
-      position: [52.3520, 13.4870]
+      position: [52.3565, 13.4762]
       sigmaM: 600
       quality: 0.7
-      text: "drone right over the stadium now"
+      text: "drone right over the ExpoCenter grounds now"
   - at: "14:24:00"
     note: Police on site find nothing; SOCIAL-SCRAPE reliability drops to 0.17
     verify: { ref: soc-stadium, outcome: falsified, by: POLICE-UNIT-7 }
 
   - at: "14:30:12"
-    note: Social post about a drone near the fan zone (neutral on intent)
+    note: Social post about a drone near the terminal (neutral on intent)
     report:
       source: SOCIAL-SCRAPE
       origin: SOC-ACCT-118
       entity: TRK-1155
       class: UAS_REPORTED
-      position: [52.3575, 13.5040]
+      position: [52.3700, 13.5106]
       sigmaM: 800
       quality: 0.81
-      text: "another drone near the fan zone"
+      text: "another drone near the terminal"
 
   - at: "14:31:00"
     periodic: { source: RF-SENSE-C, entity: TRK-1147, class: UAS_SMALL, track: trk-1147, until: "14:41:52", everyS: 4, jitterS: 0.5, sigmaM: 35, quality: 0.65 }
   - at: "14:31:30"
-    periodic: { source: RF-SENSE-S, entity: TRK-1147, class: UAS_SMALL, track: trk-1147, until: "14:41:52", everyS: 5, jitterS: 0.5, sigmaM: 45, quality: 0.6 }
+    periodic: { source: RF-SENSE-N, entity: TRK-1147, class: UAS_SMALL, track: trk-1147, until: "14:41:52", everyS: 5, jitterS: 0.5, sigmaM: 45, quality: 0.56 }
   - at: "14:31:40"
-    status: { source: RF-SENSE-E, status: degraded, note: "antenna fault, elevation unreliable" }
+    status: { source: RF-SENSE-W, status: degraded, note: "antenna fault, elevation unreliable" }
   - at: "14:32:00"
-    note: Degraded RF-SENSE-E puts TRK-1147 high (multipath)
-    periodic: { source: RF-SENSE-E, entity: TRK-1147, class: UAS_SMALL, track: trk-1147, until: "14:41:52", everyS: 6, jitterS: 0.5, sigmaM: 120, quality: 0.3, claims: { altitude_band: above-300m } }
+    note: Degraded RF-SENSE-W puts TRK-1147 high (multipath)
+    periodic: { source: RF-SENSE-W, entity: TRK-1147, class: UAS_SMALL, track: trk-1147, until: "14:41:52", everyS: 6, jitterS: 0.5, sigmaM: 120, quality: 0.3, claims: { altitude_band: above-300m } }
   - at: "14:33:00"
     note: EO-1 sees TRK-1147 low over the crowd; altitude contradiction CTR-003 opens
     periodic: { source: EO-1, entity: TRK-1147, class: UAS_SMALL, track: trk-1147, until: "14:41:52", everyS: 2, jitterS: 0.3, sigmaM: 25, quality: 0.65, claims: { altitude_band: below-120m } }
@@ -237,11 +244,11 @@ beats:
       origin: CALLER-1
       entity: TRK-1155
       class: UAS_REPORTED
-      position: [52.3530, 13.5150]
+      position: [52.3664, 13.5152]
       sigmaM: 500
       quality: 0.5
       claims: { intent: coordinated-pair }
-      text: "two drones, flying together, low over the car park"
+      text: "two drones, flying together, low over the Terminal 1 car park"
   - at: "14:36:51"
     note: Civilian call 2 - a drone, no detail (neutral on intent)
     report:
@@ -249,10 +256,10 @@ beats:
       origin: CALLER-2
       entity: TRK-1155
       class: UAS_REPORTED
-      position: [52.3560, 13.5100]
+      position: [52.3682, 13.5155]
       sigmaM: 700
       quality: 0.47
-      text: "there's a drone near the south entrance"
+      text: "there's a drone near the station entrance"
   - at: "14:37:10"
     note: OP-2 defers the altitude conflict
     operator: { operator: OP-2, action: defer, entity: TRK-1147, dimension: altitude_band }
@@ -270,7 +277,7 @@ beats:
       source: RF-SENSE-N
       entity: TRK-1155
       class: UAS_REPORTED
-      position: [52.3585, 13.5020]
+      position: [52.3726, 13.5115]
       bearingOnly: { sigmaDeg: 2.5 }
       sigmaM: 400
       quality: 0.57
@@ -283,7 +290,7 @@ beats:
       origin: CALLER-3
       entity: TRK-1155
       class: UAS_REPORTED
-      position: [52.3520, 13.5160]
+      position: [52.3664, 13.5161]
       sigmaM: 500
       quality: 0.47
       claims: { intent: coordinated-pair }
@@ -293,7 +300,7 @@ beats:
     note: RF-SENSE-SW loses power; the SW sector goes blind
     status: { source: RF-SENSE-SW, status: down, note: "power loss" }
   - at: "14:40:10"
-    periodic: { source: RF-SENSE-E, entity: TRK-1160, class: UAS_SMALL, track: trk-1160, until: "14:41:52", everyS: 10, jitterS: 1, sigmaM: 250, quality: 0.22 }
+    periodic: { source: RF-SENSE-W, entity: TRK-1160, class: UAS_SMALL, track: trk-1160, until: "14:41:52", everyS: 10, jitterS: 1, sigmaM: 250, quality: 0.22 }
 
   - at: "14:40:20"
     note: Six accounts post near-identical swarm claims within 40 s - deception flag
@@ -303,7 +310,7 @@ beats:
       class: UAS_REPORTED
       count: 6
       spanS: 40
-      position: [52.3650, 13.5150]
+      position: [52.3685, 13.5115]
       scatterM: 250
       sigmaM: 600
       quality: 0.7
@@ -316,7 +323,7 @@ beats:
 
   # ---------------------------------------------------------------- after the key frame
   - at: "14:41:34"
-    note: Police at the car park confirm a single hobbyist drone
+    note: Police at the Terminal 1 car park confirm a single hobbyist drone
     verify: { ref: rf-hobbyist, outcome: confirmed, by: POLICE-UNIT-7 }
   - at: "14:41:40"
     note: OP-1 resolves CTR-004 as hobbyist

@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { clockToMillis, isCovered, offsetM, project, Projector, type PictureSnapshot } from "@penumbra/core";
+import { clockToMillis, isCovered, offsetM, pointInPolygon, project, Projector, type PictureSnapshot } from "@penumbra/core";
 import { compileScenario, loadScenarioFile, parseScenario, ScenarioError } from "../src";
 
 const SCENARIO = fileURLToPath(new URL("../../../scenarios/ber-south-uas-surge.yaml", import.meta.url));
@@ -183,7 +183,7 @@ describe("key frame 14:41:22Z reproduces the slide 7 target screen", () => {
   });
 
   it("sector SW is blind for drones, though cooperative traffic is still seen there", () => {
-    const sw = offsetM({ lat: 52.36, lon: 13.5 }, -4500, -4500);
+    const sw = offsetM(compiled.meta.area.center, -3000, -3000);
     expect(isCovered(snap.coverage, sw, "uas")).toBe(false);
     expect(isCovered(snap.coverage, sw, "cooperative")).toBe(true);
     expect(isCovered(project(compiled.events, at("14:40:00")).coverage, sw, "uas")).toBe(true);
@@ -211,6 +211,17 @@ describe("key frame 14:41:22Z reproduces the slide 7 target screen", () => {
     expect([a.status, b.status, b.confidence.value]).toEqual(["accepted", "rejected", 0]);
     expect(a.confidence.value).toBeGreaterThan(0.9);
     expect(a.confidence.contributions.map((x) => x.originId)).toEqual(expect.arrayContaining(["OP-1", "RF-SENSE-N", "CALLER-1", "CALLER-3"]));
+  });
+});
+
+describe("scenario geography is self-consistent", () => {
+  it("every sensor report lies inside that sensor's own footprint", () => {
+    const footprints = new Map(compiled.events.flatMap((e) => (e.kind === "source_registered" && e.footprint ? [[e.sourceId, e.footprint] as const] : [])));
+    const outside = compiled.events
+      .filter((e) => e.kind === "observation" && e.position && footprints.has(e.sourceId))
+      .filter((e) => e.kind === "observation" && !pointInPolygon(e.position!, footprints.get(e.sourceId)!))
+      .map((e) => (e.kind === "observation" ? `${e.sourceId} -> ${e.entityId} @ ${new Date(e.t).toISOString().slice(11, 19)}` : ""));
+    expect([...new Set(outside)]).toEqual([]);
   });
 });
 

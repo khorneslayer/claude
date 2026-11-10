@@ -46,7 +46,8 @@ describe("render model at the key frame (slide 7)", () => {
     expect(model.wedges).toHaveLength(1);
     const w = model.wedges[0]!;
     expect(w.id).toContain("CAND-A");
-    expect(w.polygon[0]).toEqual([13.505, 52.392]); // RF-SENSE-N
+    const rfN = def.sources.find((x) => x.id === "RF-SENSE-N")!.position!;
+    expect(w.polygon[0]).toEqual([rfN[1], rfN[0]]); // the wedge starts at RF-SENSE-N
   });
 
   it("draws the ghost with its plausible envelope and a faint hard-reach ring", () => {
@@ -86,7 +87,7 @@ describe("coverage mask", () => {
     const r = Math.floor(((bounds.north - p.lat) / (bounds.north - bounds.south)) * mask.rows);
     return mask.cells[r * mask.cols + c];
   };
-  const sw = offsetM(center, -4500, -4500);
+  const sw = offsetM(center, -3000, -3000);
 
   it("separates covered, lost and never-covered ground", () => {
     const mask = computeCoverageMask(key.coverage, bounds, 160, 160);

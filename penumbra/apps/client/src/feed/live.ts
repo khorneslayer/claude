@@ -1,3 +1,4 @@
+import type { OperatorActionRequest } from "@penumbra/core";
 import type { ServerMsg } from "@penumbra/sim/browser";
 import type { FeedSource, FeedStore } from "./store";
 
@@ -5,6 +6,8 @@ import type { FeedSource, FeedStore } from "./store";
 export function connectLive(store: FeedStore, url: string, timeoutMs = 1500): Promise<boolean> {
   return new Promise((resolve) => {
     let opened = false;
+    let nextRequest = 0;
+    const pending = new Map<string, (error: string | undefined) => void>();
     const ws = new WebSocket(url);
     const timer = setTimeout(() => {
       if (!opened) {
@@ -15,6 +18,19 @@ export function connectLive(store: FeedStore, url: string, timeoutMs = 1500): Pr
     const source: FeedSource = {
       kind: "live",
       control: (command, speed) => ws.send(JSON.stringify({ type: "control", command, ...(speed !== undefined ? { speed } : {}) })),
+      act: (req: OperatorActionRequest) =>
+        new Promise((done) => {
+          const requestId = `act-${++nextRequest}`;
+          const timer = setTimeout(() => {
+            pending.delete(requestId);
+            done("the feed server did not answer");
+          }, 5000);
+          pending.set(requestId, (err) => {
+            clearTimeout(timer);
+            done(err);
+          });
+          ws.send(JSON.stringify({ type: "operator_action", requestId, ...req }));
+        }),
       close: () => ws.close(),
     };
     ws.onopen = () => {
@@ -45,11 +61,20 @@ export function connectLive(store: FeedStore, url: string, timeoutMs = 1500): Pr
         case "clock":
           store.onClock(msg.clock);
           break;
+        case "ack":
+          if (msg.requestId) {
+            pending.get(msg.requestId)?.(undefined);
+            pending.delete(msg.requestId);
+          }
+          break;
         case "error":
-          console.warn("[penumbra feed]", msg.message);
+          if (msg.requestId && pending.has(msg.requestId)) {
+            pending.get(msg.requestId)!(msg.message);
+            pending.delete(msg.requestId);
+          } else console.warn("[penumbra feed]", msg.message);
           break;
         default:
-          break; // snapshots are computed locally; acks need no handling here
+          break; // snapshots are computed locally
       }
     };
   });

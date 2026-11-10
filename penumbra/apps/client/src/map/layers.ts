@@ -173,7 +173,7 @@ export function buildStaticLayers(bounds: Bounds): Layer[] {
 }
 
 /** The picture itself: rebuilt every evaluation tick. */
-export function buildDynamicLayers({ model, placement, hoveredId }: Pick<LayerInputs, "model" | "placement" | "hoveredId">): Layer[] {
+export function buildDynamicLayers({ model, placement, hoveredId, selectedId }: Pick<LayerInputs, "model" | "placement" | "hoveredId"> & { selectedId?: string }): Layer[] {
   const layers: Layer[] = [];
   const place = (id: string) => placement?.get(id) ?? DEFAULT_PLACEMENT;
   const placeKey = placement ? [...placement].map(([k, v]) => (v ? `${k}:${v.anchor}${v.line1.join(",")}` : `${k}:-`)).join("|") : "";
@@ -234,6 +234,21 @@ export function buildDynamicLayers({ model, placement, hoveredId }: Pick<LayerIn
 
   // --- entities: confidence rings, symbols, candidate diamonds -------------
   const glyphs = model.glyphs;
+  const selected = glyphs.filter((g) => g.id === selectedId);
+  layers.push(
+    new ScatterplotLayer<Glyph>({
+      id: "selection",
+      data: selected,
+      getPosition: (d) => d.position,
+      filled: false,
+      stroked: true,
+      getLineColor: rgba(C.text, 230),
+      lineWidthUnits: "pixels",
+      getLineWidth: 1.5,
+      radiusUnits: "pixels",
+      getRadius: 33,
+    }),
+  );
   const tracks = glyphs.filter((g) => g.kind !== "candidate");
   const candidates = glyphs.filter((g) => g.kind === "candidate");
   layers.push(

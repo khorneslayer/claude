@@ -27,10 +27,13 @@ describe("compileScenario: determinism", () => {
     expect(compiled.events[0]!.kind).toBe("config");
   });
 
-  it("can drop scripted operator actions for a live operator", () => {
+  it("can leave playback decisions to a live operator, keeping the history", () => {
     const manual = compileScenario(def, { manualOperator: true });
-    expect(manual.events.some((e) => e.kind === "operator_action")).toBe(false);
-    expect(compiled.events.some((e) => e.kind === "operator_action")).toBe(true);
+    const ops = manual.events.filter((e) => e.kind === "operator_action");
+    expect(ops.map((e) => e.t)).toEqual([at("14:37:10")]); // OP-2's deferral of CTR-003 already happened
+    expect(compiled.events.filter((e) => e.kind === "operator_action")).toHaveLength(2);
+    const key = project(manual.events, manual.meta.keyFrame!);
+    expect(key.contradictions.find((c) => c.id === "CTR-003")!.status).toBe("deferred");
   });
 
   it("resolves verify references to observation ids", () => {

@@ -5,6 +5,7 @@ A confidence and decision-support layer above sensor fusion. It renders confiden
 - Plan and build prompt: [PHASE0_PROTOTYPE_BRIEF.md](PHASE0_PROTOTYPE_BRIEF.md)
 - M1 design and review notes (confidence maths, schema, decisions): [docs/M1-DESIGN.md](docs/M1-DESIGN.md)
 - M2 map rendering notes and screenshots: [docs/M2-NOTES.md](docs/M2-NOTES.md)
+- M3 panels and operator actions: [docs/M3-NOTES.md](docs/M3-NOTES.md)
 - Dependencies and licences: [DEPENDENCIES.md](DEPENDENCIES.md)
 
 **All data is synthetic.**
@@ -14,8 +15,8 @@ A confidence and decision-support layer above sensor fusion. It renders confiden
 | Milestone | Scope | State |
 |---|---|---|
 | M1 | data model, confidence engine, scenario engine, WS stream, tests | done, reviewed |
-| M2 | map rendering of the four conditions + deception flag | done, awaiting review |
-| M3 | panels + RESOLVE / DEFER | |
+| M2 | map rendering of the four conditions + deception flag | done |
+| M3 | panels + RESOLVE / DEFER | done, awaiting review |
 | M4 | time scrubber + LEGACY toggle | |
 | M5 | instrumentation, legibility probe, demo / capture mode | |
 
@@ -26,7 +27,7 @@ Requires Node ≥ 22 and pnpm 10.
 ```bash
 pnpm install
 pnpm check          # typecheck + tests
-pnpm dev            # feed server + map client: open http://127.0.0.1:5173
+pnpm dev            # feed server (interactive) + client: open http://127.0.0.1:5173
 pnpm client         # map client only (falls back to offline playback)
 pnpm feed --speed 4 --manual     # feed server only, 4x, no scripted operator actions
 pnpm frame          # print the slide 7 key frame (14:41:22Z) as text
@@ -36,7 +37,7 @@ pnpm smoke          # live-mode browser smoke test
 pnpm build          # static client build (offline mode works without a server)
 ```
 
-Client URL options: `?t=14:41:22` (freeze a moment), `?mode=offline`, `?speed=4`, `?stress=500&stats` (performance check). See [docs/M2-NOTES.md](docs/M2-NOTES.md).
+Client URL options: `?t=14:41:22` (freeze a moment), `?mode=offline`, `?speed=4`, `?op=OP-3`, `?scripted`, `?stress=500&stats` (performance check). Keys: space play/pause, `R` resolve, `D` defer. See [docs/M2-NOTES.md](docs/M2-NOTES.md).
 
 ## Layout
 

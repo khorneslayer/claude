@@ -18,8 +18,8 @@ export function feedChips(health: FeedHealth[]) {
 
 const SPEEDS = [0.5, 1, 2, 4, 8, 16];
 
-export function Header(props: { store: FeedStore; status: FeedStatus; t?: number; health: FeedHealth[]; frozen: boolean }) {
-  const { store, status, t, health, frozen } = props;
+export function Header(props: { store: FeedStore; status: FeedStatus; operator: string; t?: number; health: FeedHealth[]; frozen: boolean }) {
+  const { store, status, operator, t, health, frozen } = props;
   const clock = store.clock;
   return (
     <header className="header">
@@ -32,6 +32,7 @@ export function Header(props: { store: FeedStore; status: FeedStatus; t?: number
           </span>
         ))}
       </div>
+      <div className="operator" title="Operator id for RESOLVE / DEFER (?op=)">{operator}</div>
       <div className="clock">{t !== undefined ? formatClock(t) : "--:--:--Z"}</div>
       {!frozen && (
         <div className="transport">

@@ -42,7 +42,11 @@ export interface CompiledScenario {
 export interface CompileOptions {
   /** Override the scenario's seed. */
   seed?: number;
-  /** Drop scripted operator actions so a live operator makes the calls. */
+  /**
+   * Drop scripted operator actions from playback onwards so a live operator
+   * makes the calls. Actions in the history before playFrom are kept: they
+   * already happened when the demo opens.
+   */
   manualOperator?: boolean;
 }
 
@@ -257,7 +261,7 @@ export function compileScenario(def: ScenarioDef, opts: CompileOptions = {}): Co
       // obsId is filled in once ids are assigned.
       drafts.push({ event: { kind: "verification", t: t0, obsId: `@ref:${v.ref}`, outcome: v.outcome, by: v.by }, beat: b, sub: 0 });
     } else if ("operator" in beat) {
-      if (opts.manualOperator) return;
+      if (opts.manualOperator && t0 >= at(def.window.playFrom)) return;
       const o = beat.operator;
       const ev: DraftEvent = { kind: "operator_action", t: t0, operatorId: o.operator, action: o.action, entityId: o.entity, dimension: o.dimension };
       if (o.value !== undefined) ev.value = o.value;

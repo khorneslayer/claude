@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { EventLog, project, Projector, type DraftEvent, type LogEvent, type Millis, type PictureSnapshot } from "@penumbra/core";
+import { EventLog, project, Projector, validateOperatorAction, type DraftEvent, type LogEvent, type Millis, type PictureSnapshot } from "@penumbra/core";
 import type { CompiledScenario } from "@penumbra/sim";
 import { WebSocketServer, type WebSocket } from "ws";
 import { PROTOCOL_VERSION, type ClientMsg, type ClockState, type ServerMsg } from "@penumbra/sim";
@@ -240,16 +240,7 @@ export class PenumbraServer {
   }
 
   private validateAction(msg: ClientMsg & { type: "operator_action" }): string | undefined {
-    if (typeof msg.operatorId !== "string" || !msg.operatorId) return "operatorId is required";
-    if (msg.action !== "resolve" && msg.action !== "defer") return "action must be resolve or defer";
-    if (typeof msg.entityId !== "string" || typeof msg.dimension !== "string") return "entityId and dimension are required";
-    const c = this.liveSnapshot().contradictions.find((x) => x.entityId === msg.entityId && x.dimension === msg.dimension);
-    if (!c) return `no contradiction on ${msg.entityId} ${msg.dimension}`;
-    if (c.status === "resolved") return `${c.id} is already resolved`;
-    if (msg.action === "resolve" && !c.hypotheses.some((h) => h.value === msg.value)) {
-      return `resolve value must be one of: ${c.hypotheses.map((h) => h.value).join(", ")}`;
-    }
-    return undefined;
+    return validateOperatorAction(this.liveSnapshot(), msg);
   }
 
   private pushSnapshots() {

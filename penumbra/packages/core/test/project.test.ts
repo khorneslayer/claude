@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { betaMean, EventLog, isCovered, isCoverageLost, offsetM, project } from "../src";
+import { betaMean, EventLog, isCovered, isCoverageLost, offsetM, project, validateOperatorAction } from "../src";
 import { CENTER, LogBuilder, s, T0, testConfig } from "./helpers";
 
 const sumOf = (cs: { contribution: number }[]) => cs.reduce((a, c) => a + c.contribution, 0);
@@ -323,5 +323,30 @@ describe("EventLog", () => {
     expect(() => log.push({ ...b, t: T0 + 2 })).toThrow(/seq must increase/);
     expect(log.since(1).map((e) => e.seq)).toEqual([2]);
     expect(Object.isFrozen(log.all()[0])).toBe(true);
+  });
+});
+
+describe("validateOperatorAction", () => {
+  const b = new LogBuilder().source("RF-N").source("CIV", { type: "CIV_CALL", alpha: 5, beta: 7, halfLifeS: 600 });
+  b.report(s(0), "CIV", "C-1", { origin: "CALLER-1", quality: 0.5, claims: { intent: "coordinated-pair" } });
+  b.report(s(30), "RF-N", "C-1", { quality: 0.6, claims: { intent: "hobbyist" } });
+  const snap = project(b.events, s(30));
+  const base = { operatorId: "OP-1", entityId: "C-1", dimension: "intent" };
+
+  it("accepts resolve to a live value and defer on an unresolved contradiction", () => {
+    expect(validateOperatorAction(snap, { ...base, action: "resolve", value: "hobbyist" })).toBeUndefined();
+    expect(validateOperatorAction(snap, { ...base, action: "defer" })).toBeUndefined();
+  });
+
+  it("explains what is wrong otherwise", () => {
+    expect(validateOperatorAction(snap, { ...base, action: "resolve", value: "space" })).toMatch(/must be one of/);
+    expect(validateOperatorAction(snap, { ...base, entityId: "X", action: "defer" })).toMatch(/no contradiction/);
+    expect(validateOperatorAction(snap, { ...base, operatorId: "", action: "defer" })).toMatch(/operatorId/);
+    const b2 = new LogBuilder().source("RF-N").source("CIV", { type: "CIV_CALL", alpha: 5, beta: 7, halfLifeS: 600 });
+    b2.report(s(0), "CIV", "C-1", { origin: "CALLER-1", quality: 0.5, claims: { intent: "coordinated-pair" } });
+    b2.report(s(30), "RF-N", "C-1", { quality: 0.6, claims: { intent: "hobbyist" } });
+    b2.add({ kind: "operator_action", t: s(40), operatorId: "OP-2", action: "defer", entityId: "C-1", dimension: "intent" });
+    expect(validateOperatorAction(project(b2.events, s(40)), { ...base, action: "defer" })).toMatch(/already deferred/);
+    expect(validateOperatorAction(project(b2.events, s(40)), { ...base, action: "resolve", value: "hobbyist" })).toBeUndefined();
   });
 });

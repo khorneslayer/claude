@@ -1,4 +1,12 @@
-import { Projector, type LogEvent, type Millis, type ObservationEvent, type PictureSnapshot } from "@penumbra/core";
+import {
+  Projector,
+  type LogEvent,
+  type Millis,
+  type ObservationEvent,
+  type OperatorActionRequest,
+  type PictureSnapshot,
+  type VerificationEvent,
+} from "@penumbra/core";
 import type { ClockState, ControlMsg, ScenarioMeta } from "@penumbra/sim/browser";
 
 export type FeedStatus = "connecting" | "live" | "offline" | "disconnected";
@@ -6,6 +14,8 @@ export type FeedStatus = "connecting" | "live" | "offline" | "disconnected";
 export interface FeedSource {
   readonly kind: "live" | "offline";
   control(cmd: ControlMsg["command"], speed?: number): void;
+  /** Take an operator action. Resolves to an error message, or undefined on success. */
+  act(req: OperatorActionRequest): Promise<string | undefined>;
   close(): void;
 }
 
@@ -21,6 +31,7 @@ export class FeedStore {
   private clockAt = 0;
   private events: LogEvent[] = [];
   private readonly obs = new Map<string, ObservationEvent>();
+  private readonly verdicts = new Map<string, VerificationEvent>();
   private projector = new Projector();
   private version = 0;
   private readonly listeners = new Set<() => void>();
@@ -57,17 +68,20 @@ export class FeedStore {
     if (reset) {
       this.events = [];
       this.obs.clear();
+      this.verdicts.clear();
       this.projector = new Projector();
     }
     for (const e of events) {
       this.events.push(e);
       if (e.kind === "observation") this.obs.set(e.obsId, e);
+      else if (e.kind === "verification" && !this.verdicts.has(e.obsId)) this.verdicts.set(e.obsId, e);
       this.projector.apply(e);
     }
     this.emit();
   }
 
   lookupObs = (obsId: string) => this.obs.get(obsId);
+  lookupVerdict = (obsId: string) => this.verdicts.get(obsId);
 
   get log(): readonly LogEvent[] {
     return this.events;
@@ -88,5 +102,9 @@ export class FeedStore {
 
   control(cmd: ControlMsg["command"], speed?: number) {
     this.source?.control(cmd, speed);
+  }
+
+  act(req: OperatorActionRequest): Promise<string | undefined> {
+    return this.source ? this.source.act(req) : Promise.resolve("not connected");
   }
 }

@@ -1,17 +1,20 @@
 import { MapView, WebMercatorViewport, type MapViewState, type PickingInfo } from "@deck.gl/core";
 import DeckGL from "@deck.gl/react";
 import { formatElapsed, type PictureSnapshot } from "@penumbra/core";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { connectLive } from "./feed/live";
 import { startOffline } from "./feed/offline";
 import { FeedStore } from "./feed/store";
 import { buildCoverageLayers, buildDynamicLayers, buildStaticLayers } from "./map/layers";
 import { boundsAround, computeCoverageMask, coverageKey, LOST } from "./model/coverage";
+import { defaultSelection, provenance, reconcileSelection, registerCards, sourceRows, type Lookups, type Selection } from "./model/panels";
 import { placeLabels } from "./model/place";
 import { buildRenderModel, sectorName, type FlagMarker, type Glyph } from "./model/view";
 import { destination, distanceM, bearingDeg } from "@penumbra/core";
 import { Header } from "./ui/Header";
 import { Banner, Legend } from "./ui/Legend";
+import { RightPanel, Toast } from "./ui/Provenance";
+import { LeftPanel } from "./ui/Register";
 import { Stats } from "./ui/Stats";
 
 /**
@@ -23,6 +26,8 @@ import { Stats } from "./ui/Stats";
  *   ?evalHz=10           local re-evaluation rate
  *   ?stress=500          offline, plus N synthetic three-source drones (performance check)
  *   ?stats               fps meter and per-tick timings
+ *   ?op=OP-3             operator id for RESOLVE / DEFER (default OP-1)
+ *   ?scripted            offline: keep the scenario's scripted decisions after playFrom
  */
 const params = new URLSearchParams(window.location.search);
 const FROZEN_AT = params.get("t") ?? undefined;
@@ -30,6 +35,10 @@ const EVAL_HZ = Number(params.get("evalHz") ?? 10);
 const MAP_VIEW = new MapView({ repeat: false });
 const STRESS = params.get("stress") ? Number(params.get("stress")) : undefined;
 const SHOW_STATS = params.has("stats");
+const OPERATOR = params.get("op") ?? "OP-1";
+const SCRIPTED = params.has("scripted");
+/** Mock releasability marking (slide 6, item 08): visible without opening a dialogue. */
+const MARKING = "EXERCISE · SYNTHETIC DATA · REL DEU/NLD (MOCK)";
 
 export function App() {
   const store = useMemo(() => new FeedStore(), []);
@@ -37,6 +46,18 @@ export function App() {
   const [snap, setSnap] = useState<PictureSnapshot>();
   const [hovered, setHovered] = useState<string>();
   const booted = useRef(false);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [mapSize, setMapSize] = useState<{ width: number; height: number }>();
+  useEffect(() => {
+    const el = mapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const r = entry!.contentRect;
+      if (r.width > 0 && r.height > 0) setMapSize({ width: Math.round(r.width), height: Math.round(r.height) });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const stats = useRef({ evalMs: 0, modelMs: 0, layersMs: 0, ticks: 0 });
 
   // Boot: live feed if reachable, otherwise the offline player.
@@ -45,7 +66,12 @@ export function App() {
     booted.current = true;
     const speed = params.get("speed") ? Number(params.get("speed")) : undefined;
     const offline = () =>
-      startOffline(store, { ...(FROZEN_AT ? { at: FROZEN_AT, paused: true } : {}), ...(speed ? { speed } : {}), ...(STRESS ? { stress: STRESS } : {}) });
+      startOffline(store, {
+        ...(FROZEN_AT ? { at: FROZEN_AT, paused: true } : {}),
+        ...(speed ? { speed } : {}),
+        ...(STRESS ? { stress: STRESS } : {}),
+        scripted: SCRIPTED,
+      });
     if (FROZEN_AT || STRESS || params.get("mode") === "offline") {
       offline();
       return;
@@ -106,6 +132,10 @@ export function App() {
   useEffect(() => {
     (window as unknown as { __penumbra?: unknown }).__penumbra = { snap, model, status, head: store.clock?.head, store, stats: stats.current };
   }, [snap, model, status, store]);
+  useEffect(() => {
+    const w = window as unknown as { __penumbra?: Record<string, unknown> };
+    if (w.__penumbra) Object.assign(w.__penumbra, { selection, prov, cards });
+  });
 
   // Label anchor for lost coverage: the lost cell nearest the centre, nudged into the lost area.
   // (A coarse raster is plenty for placing a label; the coverage itself is drawn as exact vectors.)
@@ -136,13 +166,12 @@ export function App() {
 
   // Fit the operating area (about 12 x 8 km around the scenario centre) to the map pane.
   const initialViewState = useMemo(() => {
-    if (!meta) return undefined;
+    if (!meta || !mapSize) return undefined;
     const km = boundsAround(meta.area.center, 1);
     const kmLon = (km.east - km.west) / 2;
     const kmLat = (km.north - km.south) / 2;
     const c = meta.area.center;
-    const width = window.innerWidth;
-    const height = Math.max(200, window.innerHeight - 56);
+    const { width, height } = mapSize;
     const fit = new WebMercatorViewport({ width, height }).fitBounds(
       [
         [c.lon - 5.6 * kmLon, c.lat - 4.4 * kmLat],
@@ -151,7 +180,9 @@ export function App() {
       { padding: Math.min(40, width / 20) },
     );
     return { longitude: fit.longitude, latitude: fit.latitude, zoom: fit.zoom, pitch: 0, bearing: 0 };
-  }, [meta]);
+    // Fit once, when the pane first has a size; afterwards the operator owns the view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta, mapSize !== undefined]);
 
   const [viewState, setViewState] = useState<MapViewState>();
   useEffect(() => {
@@ -160,8 +191,8 @@ export function App() {
 
   // Declutter labels in screen space for the current view.
   const placement = useMemo(() => {
-    if (!model || !viewState) return undefined;
-    const vp = new WebMercatorViewport({ ...viewState, width: window.innerWidth, height: Math.max(200, window.innerHeight - 56) });
+    if (!model || !viewState || !mapSize) return undefined;
+    const vp = new WebMercatorViewport({ ...viewState, ...mapSize });
     const project = (p: [number, number]) => vp.project(p) as [number, number];
     const priority = { contradicted: 6, flagged: 5, corroborated: 4, degraded: 3, single: 3, ghost: 2, cooperative: 1 } as const;
     const items = model.glyphs.filter((g) => g.category !== "cooperative").map((g) => ({ id: g.id, position: g.position, lines: g.label, priority: priority[g.category] }));
@@ -171,7 +202,59 @@ export function App() {
       return { x0: x - w / 2, y0: y - 34 - 44, x1: x + w / 2, y1: y - 30 };
     });
     return placeLabels(items, project, model.glyphs.map((g) => ({ position: g.position, radius: 22 })), flagBoxes, { width: vp.width, height: vp.height });
-  }, [model, viewState]);
+  }, [model, viewState, mapSize]);
+
+  // Selection: what the provenance panel shows. Until the operator picks something,
+  // it follows the newest open contradiction's leading candidate (slide 7).
+  const [userSel, setUserSel] = useState<Selection>();
+  const selection = useMemo(() => (snap ? (reconcileSelection(userSel, snap) ?? defaultSelection(snap)) : undefined), [snap, userSel]);
+  const lookups: Lookups = useMemo(() => ({ obs: store.lookupObs, verdict: store.lookupVerdict }), [store]);
+  const cards = useMemo(() => (snap ? registerCards(snap, lookups) : []), [snap, lookups]);
+  const sources = useMemo(() => (snap ? sourceRows(snap) : []), [snap]);
+  const prov = useMemo(() => (snap && selection ? provenance(selection, snap, lookups) : undefined), [snap, selection, lookups]);
+  const selectedGlyph = selection ? (selection.label ? `${selection.entityId}:${selection.label}` : selection.entityId) : undefined;
+
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<{ message: string; tone: "ok" | "error" }>();
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(undefined), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const act = useCallback(
+    async (kind: "resolve" | "defer") => {
+      const a = prov?.action;
+      if (!a?.dimension || busy) return;
+      if (kind === "resolve" ? !a.canResolve : !a.canDefer) return;
+      setBusy(true);
+      const error = await store.act({
+        operatorId: OPERATOR,
+        action: kind,
+        entityId: a.entityId,
+        dimension: a.dimension,
+        ...(kind === "resolve" && a.resolveValue ? { value: a.resolveValue } : {}),
+      });
+      setBusy(false);
+      setToast(
+        error
+          ? { message: error, tone: "error" }
+          : { message: `${a.contradictionId} ${kind === "resolve" ? `resolved as ${a.resolveValue?.replaceAll("-", " ")}` : "deferred"} · ${OPERATOR}`, tone: "ok" },
+      );
+    },
+    [prov, busy, store],
+  );
+
+  // R resolves, D defers the selected item.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.metaKey || e.ctrlKey) return;
+      if (e.key === "r" || e.key === "R") void act("resolve");
+      if (e.key === "d" || e.key === "D") void act("defer");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [act]);
 
   // Three layer groups with different lifetimes, so a 10 Hz tick never re-tessellates static geometry.
   const staticLayers = useMemo(() => (bounds ? buildStaticLayers(bounds) : []), [bounds]);
@@ -186,16 +269,23 @@ export function App() {
   const dynamicLayers = useMemo(() => {
     if (!model) return [];
     const t0 = performance.now();
-    const out = buildDynamicLayers({ model, ...(placement ? { placement } : {}), ...(hovered ? { hoveredId: hovered } : {}) });
+    const out = buildDynamicLayers({
+      model,
+      ...(placement ? { placement } : {}),
+      ...(hovered ? { hoveredId: hovered } : {}),
+      ...(selectedGlyph ? { selectedId: selectedGlyph } : {}),
+    });
     stats.current.layersMs = performance.now() - t0;
     return out;
-  }, [model, placement, hovered]);
+  }, [model, placement, hovered, selectedGlyph]);
   const layers = useMemo(() => [...coverageLayers, ...staticLayers, ...dynamicLayers], [coverageLayers, staticLayers, dynamicLayers]);
 
   return (
     <div className="app">
-      <Header store={store} status={status} health={snap?.feedHealth ?? []} frozen={FROZEN_AT !== undefined} {...(snap ? { t: snap.t } : {})} />
-      <div className="map">
+      <Header store={store} status={status} operator={OPERATOR} health={snap?.feedHealth ?? []} frozen={FROZEN_AT !== undefined} {...(snap ? { t: snap.t } : {})} />
+      <div className="body">
+      <LeftPanel cards={cards} sources={sources} onSelect={setUserSel} {...(selection ? { selection } : {})} />
+      <div className="map" ref={mapRef}>
         {viewState && (
           <DeckGL
             views={MAP_VIEW}
@@ -204,12 +294,20 @@ export function App() {
             controller={{ dragRotate: false }}
             layers={layers}
             onHover={(info: PickingInfo) => setHovered((info.object as Glyph | undefined)?.entityId)}
+            onClick={(info: PickingInfo) => {
+              const g = info.object as Glyph | undefined;
+              if (g && "entityId" in g) setUserSel({ entityId: g.entityId, ...(g.kind === "candidate" ? { label: g.id.split(":")[1]! } : {}) });
+            }}
+            getCursor={({ isHovering }) => (isHovering ? "pointer" : "grab")}
             getTooltip={(info: PickingInfo) => tooltip(info, snap)}
           />
         )}
         <Legend />
         <Banner />
         {SHOW_STATS && <Stats stats={stats.current} entities={snap?.entities.length ?? 0} />}
+        <Toast tone={toast?.tone ?? "ok"} {...(toast ? { message: toast.message } : {})} />
+      </div>
+      <RightPanel marking={MARKING} busy={busy} onResolve={() => void act("resolve")} onDefer={() => void act("defer")} {...(prov ? { view: prov } : {})} />
       </div>
     </div>
   );

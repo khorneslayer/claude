@@ -1,4 +1,4 @@
-import { clockToMillis, createRng, offsetM, type DraftEvent, type LogEvent, type Millis } from "@penumbra/core";
+import { clockToMillis, createRng, offsetM, validateOperatorAction, type DraftEvent, type LogEvent, type Millis, type OperatorActionRequest } from "@penumbra/core";
 import { compileScenario, parseScenario, type CompiledScenario } from "@penumbra/sim/browser";
 import scenarioText from "../../../../scenarios/ber-south-uas-surge.yaml?raw";
 import type { FeedSource, FeedStore } from "./store";
@@ -10,24 +10,36 @@ const TICK_MS = 100;
  * server (screenshots, static hosting). Behaves like the server: the log only
  * grows as the clock passes events.
  */
-export function startOffline(store: FeedStore, opts: { at?: string; speed?: number; paused?: boolean; stress?: number } = {}): FeedSource {
-  const compiled: CompiledScenario = compileScenario(parseScenario(scenarioText));
+export function startOffline(
+  store: FeedStore,
+  opts: { at?: string; speed?: number; paused?: boolean; stress?: number; scripted?: boolean } = {},
+): FeedSource {
+  // Interactive by default: decisions from playback onwards are the operator's.
+  const compiled: CompiledScenario = compileScenario(parseScenario(scenarioText), { manualOperator: !opts.scripted });
   const { meta } = compiled;
   const events = opts.stress ? withStress(compiled, opts.stress) : compiled.events;
   let head = meta.playFrom;
   let next = 0;
   let playing = !opts.paused;
   let speed = opts.speed ?? 1;
+  // Like the server: sequence numbers are assigned in publication order, so
+  // operator actions can be appended at the head.
+  let seq = 0;
+  const stamp = (e: DraftEvent): LogEvent => ({ ...e, seq: ++seq }) as LogEvent;
 
   const publish = (t: Millis, reset = false) => {
     const batch: LogEvent[] = [];
-    while (next < events.length && events[next]!.t <= t) batch.push(events[next++]!);
+    while (next < events.length && events[next]!.t <= t) {
+      const { seq: _s, ...draft } = events[next++]!;
+      batch.push(stamp(draft as DraftEvent));
+    }
     if (batch.length || reset) store.onEvents(batch, reset);
   };
   const clock = () => store.onClock({ head, playing, speed, ended: head >= meta.end });
   const restart = (to: Millis) => {
     head = to;
     next = 0;
+    seq = 0;
     publish(head, true);
   };
 
@@ -52,6 +64,21 @@ export function startOffline(store: FeedStore, opts: { at?: string; speed?: numb
       else if (cmd === "speed" && s) speed = s;
       else if (cmd === "restart") restart(meta.playFrom);
       clock();
+    },
+    act: async (req: OperatorActionRequest) => {
+      const problem = validateOperatorAction(store.evaluate(head), req);
+      if (problem) return problem;
+      const draft: DraftEvent = {
+        kind: "operator_action",
+        t: head,
+        operatorId: req.operatorId,
+        action: req.action,
+        entityId: req.entityId,
+        dimension: req.dimension,
+        ...(req.action === "resolve" && req.value !== undefined ? { value: req.value } : {}),
+      };
+      store.onEvents([stamp(draft)]);
+      return undefined;
     },
     close: () => clearInterval(timer),
   };

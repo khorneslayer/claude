@@ -38,7 +38,7 @@ const check = (ok, msg) => {
 
 try {
   const tsx = resolve(root, "node_modules/tsx/dist/cli.mjs");
-  await start(process.execPath, [tsx, "apps/server/src/main.ts", "--port", FEED_PORT, "--speed", "8"], root, /websocket/);
+  await start(process.execPath, [tsx, "apps/server/src/main.ts", "--port", FEED_PORT, "--speed", "8", "--manual"], root, /websocket/);
   await start(process.execPath, [resolve(here, "../node_modules/vite/bin/vite.js"), "--port", WEB_PORT, "--strictPort", "--host", "127.0.0.1"], resolve(here, ".."), /Local/, {
     PENUMBRA_FEED: `http://127.0.0.1:${FEED_PORT}`,
   });
@@ -63,6 +63,30 @@ try {
   check(b.seq > a.seq, `log grows from the server (seq ${a.seq} -> ${b.seq})`);
   const st = b.stats;
   console.log(`      per tick (ms): evaluate ${st.evalMs.toFixed(1)} · render model ${st.modelMs.toFixed(1)} · layers ${st.layersMs.toFixed(1)} · ${st.ticks} ticks`);
+  // M3: the operator resolves CTR-004 from the provenance panel.
+  const ctr = await page
+    .waitForFunction(() => window.__penumbra.cards?.some((c) => c.id === "CTR-004"), null, { timeout: 20000 })
+    .then(() => true, () => false);
+  check(ctr, "CTR-004 appears in the contradiction register");
+  const sel = await page.evaluate(() => window.__penumbra.selection);
+  check(sel?.entityId === "TRK-1155" && sel?.label === "CAND-A", `provenance opens on TRK-1155 CAND-A (${JSON.stringify(sel)})`);
+  const panelText = await page.locator(".panel.right").innerText();
+  check(/PROVENANCE · CAND-A/i.test(panelText) && /Bearing only/.test(panelText), "provenance panel shows CAND-A with its RF bearing row");
+  await page.getByRole("button", { name: /Resolve · hobbyist/i }).click();
+  const resolved = await page
+    .waitForFunction(() => window.__penumbra.snap.contradictions.find((c) => c.id === "CTR-004")?.status === "resolved", null, { timeout: 10000 })
+    .then(() => true, () => false);
+  check(resolved, "clicking RESOLVE resolves CTR-004 on the live picture");
+  const toastText = await page.locator(".toast").innerText().catch(() => "");
+  check(/CTR-004 resolved as hobbyist · OP-1/.test(toastText), `confirmation shown ("${toastText}")`);
+  const log = await (await fetch(`http://127.0.0.1:${FEED_PORT}/log.jsonl`)).text();
+  const op = log.trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.kind === "operator_action" && e.operatorId === "OP-1");
+  check(op?.value === "hobbyist", "the server's append-only log records OP-1's decision");
+  await page.keyboard.press("d");
+  await page.waitForTimeout(500);
+  const toast2 = await page.locator(".toast").innerText().catch(() => "");
+  check(!/deferred/.test(toast2), "D does nothing once CTR-004 is resolved");
+
   check(errors.length === 0, `no page errors${errors.length ? `: ${errors.join("; ")}` : ""}`);
   await browser.close();
 } catch (e) {

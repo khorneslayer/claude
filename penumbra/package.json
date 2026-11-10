@@ -22,9 +22,13 @@
     "probe:smoke": "pnpm --filter @penumbra/client probe:smoke",
     "demo": "pnpm --parallel --filter @penumbra/server --filter @penumbra/client demo",
     "demo:record": "node apps/client/scripts/record-demo.mjs",
-    "probe": "pnpm dev"
+    "probe": "pnpm dev",
+    "manual": "node docs/manual/build.mjs"
   },
   "devDependencies": {
+    "@fontsource/anton": "5.3.0",
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
     "@types/node": "26.6.6",
     "@types/ws": "8.18.2",
     "fast-check": "4.10.2",

@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PENUMBRA Phase 0 · Operator and Demonstrator Manual</title>
+<style>
+@font-face { font-family: "Anton"; src: url("../../node_modules/@fontsource/anton/files/anton-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Inter"; src: url("../../node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Inter"; src: url("../../node_modules/@fontsource/inter/files/inter-latin-400-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; }
+@font-face { font-family: "Inter"; src: url("../../node_modules/@fontsource/inter/files/inter-latin-500-normal.woff2") format("woff2"); font-weight: 500; }
+@font-face { font-family: "Inter"; src: url("../../node_modules/@fontsource/inter/files/inter-latin-600-normal.woff2") format("woff2"); font-weight: 600; }
+@font-face { font-family: "Inter"; src: url("../../node_modules/@fontsource/inter/files/inter-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-600-normal.woff2") format("woff2"); font-weight: 600; }
+
+/* Stratosphere design tokens, taken from the PENUMBRA pitch deck */
+:root {
+  --bg: #0A0D1F; --bg-deep: #05060F; --panel: #121632; --panel-2: #0F1328; --border: #1C2147; --line: #4A5178;
+  --text: #C7CDE6; --white: #FFFFFF; --muted: #7A82A8;
+  --cyan: #3BE8FF; --orange: #E86A3C; --amber: #FFB020; --green: #3BE8A8;
+  --mono: "JetBrains Mono", ui-monospace, monospace; --sans: "Inter", system-ui, sans-serif; --display: "Anton", "Inter", sans-serif;
+}
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: var(--sans); color: var(--text); font-size: 9.6pt; line-height: 1.5; counter-reset: page; }
+
+.page { width: 210mm; height: 297mm; padding: 17mm 17mm 20mm; position: relative; overflow: hidden; page-break-after: always; break-after: page; background: var(--bg); counter-increment: page; }
+.page.deep { background: var(--bg-deep); }
+.page:last-child { page-break-after: auto; break-after: auto; }
+.foot { position: absolute; left: 17mm; right: 17mm; bottom: 9mm; display: flex; justify-content: space-between; font-family: var(--mono); font-size: 6.6pt; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; border-top: 1px solid var(--border); padding-top: 3mm; }
+.foot .n::after { content: counter(page, decimal-leading-zero); color: var(--white); }
+
+.label { font-family: var(--mono); font-size: 7.4pt; letter-spacing: 0.3em; color: var(--cyan); text-transform: uppercase; margin: 0 0 4mm; }
+.label::before { content: "//  "; }
+h1 { font-family: var(--display); font-weight: 400; font-size: 31pt; line-height: 1.04; color: var(--white); text-transform: uppercase; letter-spacing: 0.01em; margin: 0 0 4mm; }
+h2 { font-family: var(--display); font-weight: 400; font-size: 15pt; color: var(--white); text-transform: uppercase; letter-spacing: 0.02em; margin: 7mm 0 2.5mm; }
+h3 { font-size: 10.5pt; font-weight: 600; color: var(--white); margin: 0 0 1.5mm; }
+p { margin: 0 0 2.6mm; }
+.lead { font-size: 11pt; line-height: 1.5; color: var(--text); max-width: 160mm; margin-bottom: 5mm; }
+.muted { color: var(--muted); }
+b, strong { color: var(--white); font-weight: 600; }
+code, kbd, .mono { font-family: var(--mono); font-size: 8.4pt; }
+code { color: var(--cyan); }
+kbd { display: inline-block; min-width: 5.5mm; text-align: center; padding: 0.2mm 1.6mm; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 1mm; color: var(--white); font-size: 7.6pt; }
+.rule { width: 26mm; height: 2px; background: var(--orange); margin: 4mm 0 6mm; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; }
+.card { background: var(--panel); border: 1px solid var(--border); padding: 4mm 4.5mm; }
+.card .num { font-family: var(--mono); font-size: 7pt; letter-spacing: 0.2em; color: var(--orange); margin-bottom: 1.6mm; }
+.card p:last-child { margin-bottom: 0; }
+.card.cyan { border-left: 2px solid var(--cyan); }
+.card.orange { border-left: 2px solid var(--orange); }
+.card.amber { border-left: 2px solid var(--amber); }
+
+pre.cmd { font-family: var(--mono); font-size: 8.2pt; line-height: 1.6; background: var(--bg-deep); border: 1px solid var(--border); border-left: 2px solid var(--cyan); color: var(--white); padding: 3mm 4mm; margin: 0 0 3mm; white-space: pre-wrap; }
+pre.cmd .c { color: var(--muted); }
+
+table { width: 100%; border-collapse: collapse; margin: 0 0 3.5mm; font-size: 8.8pt; }
+th { text-align: left; font-family: var(--mono); font-weight: 400; font-size: 6.8pt; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); padding: 1.8mm 2.5mm 1.8mm 0; border-bottom: 1px solid var(--line); }
+td { padding: 1.8mm 2.5mm 1.8mm 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+td:first-child { color: var(--white); }
+td.k { white-space: nowrap; }
+
+.swatch { display: inline-block; width: 2.6mm; height: 2.6mm; vertical-align: -0.3mm; margin-right: 1.6mm; }
+.figure { border: 1px solid var(--border); background: var(--bg-deep); margin: 0 0 3mm; overflow: hidden; }
+.figure img { display: block; width: 100%; }
+.caption { font-family: var(--mono); font-size: 6.8pt; letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; margin: -1mm 0 4mm; }
+/* crops of the key-frame screenshot; geometry set by the script below */
+.crop { border: 1px solid var(--border); background-repeat: no-repeat; background-color: var(--bg-deep); margin-bottom: 2mm; }
+
+.callouts { position: relative; }
+.callouts .dot { position: absolute; width: 6mm; height: 6mm; margin: -3mm 0 0 -3mm; border-radius: 50%; background: var(--orange); color: var(--white); font-family: var(--mono); font-weight: 600; font-size: 7.6pt; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1.2mm rgba(232, 106, 60, 0.28); }
+ol.keyed { list-style: none; padding: 0; margin: 0; counter-reset: k; display: grid; grid-template-columns: 1fr 1fr; gap: 1.8mm 6mm; }
+ol.keyed li { counter-increment: k; position: relative; padding-left: 8mm; }
+ol.keyed li::before { content: counter(k); position: absolute; left: 0; top: 0.2mm; width: 5mm; height: 5mm; border-radius: 50%; background: var(--orange); color: var(--white); font-family: var(--mono); font-size: 7pt; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+
+.note { border: 1px solid var(--border); border-left: 2px solid var(--amber); background: var(--panel-2); padding: 3mm 4mm; margin: 3mm 0; }
+.note .t { font-family: var(--mono); font-size: 6.8pt; letter-spacing: 0.22em; text-transform: uppercase; color: var(--amber); margin-bottom: 1mm; }
+ul.tight { margin: 0 0 3mm; padding-left: 4.5mm; }
+ul.tight li { margin-bottom: 1mm; }
+.toc { list-style: none; padding: 0; margin: 0; }
+.toc li { display: flex; align-items: baseline; gap: 3mm; padding: 1.55mm 0; border-bottom: 1px solid var(--border); }
+.toc .no { font-family: var(--mono); color: var(--orange); font-size: 7.4pt; width: 8mm; }
+.toc .tt { color: var(--white); font-weight: 500; flex: 1; }
+.toc .pg { font-family: var(--mono); color: var(--muted); font-size: 7.4pt; }
+
+/* cover */
+.cover { padding: 20mm 18mm; display: flex; flex-direction: column; }
+.cover .top { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 7.4pt; letter-spacing: 0.3em; text-transform: uppercase; }
+.cover .top .l { color: var(--cyan); }
+.cover .top .l::before { content: "//  "; }
+.cover .top .r { color: var(--muted); }
+.cover .title { margin-top: 62mm; }
+.cover .title .big { font-family: var(--display); font-size: 74pt; line-height: 0.95; color: var(--white); letter-spacing: 0.01em; }
+.cover .title .sub { font-size: 15pt; color: var(--text); margin-top: 5mm; line-height: 1.35; max-width: 140mm; }
+.cover .hero { margin-top: 12mm; border: 1px solid var(--border); }
+.cover .hero img { display: block; width: 100%; }
+.cover .bottom { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; }
+.brand { display: flex; align-items: center; gap: 4mm; font-family: var(--mono); font-size: 7.2pt; letter-spacing: 0.28em; color: var(--muted); text-transform: uppercase; line-height: 1.9; }
+.brand img { height: 12mm; }
+.stamp { font-family: var(--mono); font-size: 7.2pt; letter-spacing: 0.24em; text-transform: uppercase; text-align: right; line-height: 1.9; color: var(--white); }
+.stamp .amber { color: var(--amber); }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ COVER -->
+<section class="page cover">
+  <div class="top"><span class="l">Operator and demonstrator manual</span><span class="r">Defence and dual-use</span></div>
+  <div class="title">
+    <div class="big">PENUMBRA</div>
+    <div class="sub">Threat interface, Phase 0 prototype. How to run it, read it, decide with it, and show it.</div>
+    <div class="rule"></div>
+  </div>
+  <div class="hero"><img src="../screens/m4-penumbra-1441.png" alt="PENUMBRA key frame"></div>
+  <div class="bottom">
+    <div class="brand"><img src="assets/stratosphere-mark.png" alt=""><div>Stratosphere Solutions<br>Berlin · November 2026</div></div>
+    <div class="stamp">Version 0.5 · milestones M1–M5<br><span class="amber">Exercise · synthetic data</span></div>
+  </div>
+</section>
+
+<!-- ============================================================ CONTENTS + ABOUT -->
+<section class="page">
+  <div class="label">About this manual</div>
+  <h1>What PENUMBRA is</h1>
+  <p class="lead">PENUMBRA is a confidence and decision-support layer for the common operational picture. It sits above sensor fusion and draws what fielded pictures leave out: how sure we are, how old the information is, where it came from, where sources disagree, and where we cannot see at all.</p>
+  <div class="grid3" style="margin-bottom:6mm">
+    <div class="card cyan"><div class="num">01</div><h3>Confidence on the picture</h3><p>Every contact shows how much evidence stands behind it, and every number breaks down into the sources that make it up.</p></div>
+    <div class="card orange"><div class="num">02</div><h3>Disagreement kept</h3><p>When sources disagree, both readings stay on screen until an operator decides. Nothing is averaged away.</p></div>
+    <div class="card amber"><div class="num">03</div><h3>Blindness made visible</h3><p>"Nothing there" and "we cannot see there" look different. Stale contacts age visibly instead of looking current.</p></div>
+  </div>
+  <h2>Contents</h2>
+  <ul class="toc">
+    <li><span class="no">01</span><span class="tt">Getting started</span><span class="pg">03</span></li>
+    <li><span class="no">02</span><span class="tt">The screen at a glance</span><span class="pg">04</span></li>
+    <li><span class="no">03</span><span class="tt">Reading the picture: confidence and colour</span><span class="pg">05</span></li>
+    <li><span class="no">04</span><span class="tt">Reading the picture: age, disagreement, coverage, deception</span><span class="pg">06</span></li>
+    <li><span class="no">05</span><span class="tt">The panels</span><span class="pg">07</span></li>
+    <li><span class="no">06</span><span class="tt">Taking decisions</span><span class="pg">08</span></li>
+    <li><span class="no">07</span><span class="tt">Looking back: replay</span><span class="pg">09</span></li>
+    <li><span class="no">08</span><span class="tt">The LEGACY view</span><span class="pg">10</span></li>
+    <li><span class="no">09</span><span class="tt">Running a legibility probe</span><span class="pg">11</span></li>
+    <li><span class="no">10</span><span class="tt">Demo and recording</span><span class="pg">12</span></li>
+    <li><span class="no">11</span><span class="tt">Reference: keys, URL options, commands</span><span class="pg">13</span></li>
+    <li><span class="no">12</span><span class="tt">Troubleshooting, files and glossary</span><span class="pg">14</span></li>
+    <li><span class="no">13</span><span class="tt">Data, licences and limits</span><span class="pg">15</span></li>
+  </ul>
+  <div class="note"><div class="t">Phase 0 prototype</div>All data is synthetic: callsigns, sensors, callers and accounts are invented. The scenario is a drone surge at Berlin Brandenburg (EDDB) during a public event at the ExpoCenter. The system is not accredited and must not be used operationally.</div>
+  <div class="foot"><span>PENUMBRA · Phase 0 manual</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ GETTING STARTED -->
+<section class="page">
+  <div class="label">01 · Getting started</div>
+  <h1>Install and run</h1>
+  <p class="lead">PENUMBRA runs on a normal laptop. It needs no internet connection once installed, no map tiles and no cloud service.</p>
+  <h2>You need</h2>
+  <ul class="tight">
+    <li><b>Node.js 22 or newer</b> (the current LTS from nodejs.org) and <b>pnpm 10</b> (<code>npm install -g pnpm</code>).</li>
+    <li>A copy of the repository, on the branch with the prototype.</li>
+    <li>A recent Chrome, Edge or Firefox. A laptop with a graphics chip renders smoothly; a virtual machine without one is slow.</li>
+  </ul>
+  <h2>First run</h2>
+  <p>From the <code>penumbra</code> folder, run each line separately:</p>
+  <pre class="cmd">pnpm install          <span class="c"># once, and after every update</span>
+pnpm dev              <span class="c"># feed server + client</span></pre>
+  <p>Open <b>http://127.0.0.1:5173</b>. Playback starts at 14:38:22; the moment from the pitch deck (slide 7) arrives at 14:41:22, three minutes in. After about 40 seconds the RF reading arrives and contradiction CTR-004 appears.</p>
+  <div class="grid2" style="margin-top:4mm">
+    <div class="card"><div class="num">LIVE</div><h3>pnpm dev</h3><p>Feed server and client together. The server is the single source of truth: every client sees the same picture, decisions go into its append-only log, and session logs are stored.</p></div>
+    <div class="card"><div class="num">OFFLINE</div><h3>pnpm client</h3><p>The client alone. With no server it plays the scenario in the browser. Everything works, including decisions; session logs are kept for download. Good for travelling demos.</p></div>
+  </div>
+  <div class="note"><div class="t">Windows PowerShell</div>Windows PowerShell 5.1 does not accept <code>&amp;&amp;</code>: run commands one per line. If PowerShell refuses to run <code>npm</code> or <code>pnpm</code> ("running scripts is disabled"), run <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code> once, or use <code>npm.cmd</code> and <code>pnpm.cmd</code> instead.</div>
+  <h2>Stopping and restarting</h2>
+  <p><kbd>Ctrl</kbd> + <kbd>C</kbd> in the terminal stops everything. The <b>⟲</b> button in the header restarts the scenario from 14:38:22; <kbd>Space</kbd> pauses and resumes; the speed menu runs it at up to 16×.</p>
+  <div class="foot"><span>Getting started</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ SCREEN AT A GLANCE -->
+<section class="page">
+  <div class="label">02 · The screen at a glance</div>
+  <h1>One screen, five areas</h1>
+  <p class="lead">The picture in the middle, what needs a decision on the left, the evidence behind the selected item on the right, time along the bottom.</p>
+  <div class="callouts figure">
+    <img src="../screens/m4-penumbra-1441.png" alt="Annotated PENUMBRA screen">
+    <span class="dot" style="left:61%;top:2.6%">1</span>
+    <span class="dot" style="left:83.5%;top:2.6%">2</span>
+    <span class="dot" style="left:97%;top:6.4%">3</span>
+    <span class="dot" style="left:11%;top:9%">4</span>
+    <span class="dot" style="left:11%;top:47.6%">5</span>
+    <span class="dot" style="left:52%;top:20%">6</span>
+    <span class="dot" style="left:23%;top:90.4%">7</span>
+    <span class="dot" style="left:44%;top:97%">8</span>
+    <span class="dot" style="left:88%;top:9%">9</span>
+    <span class="dot" style="left:88%;top:94.8%">10</span>
+  </div>
+  <div class="caption">Key frame 14:41:22Z · the composition of pitch-deck slide 7</div>
+  <ol class="keyed">
+    <li><b>Feed health.</b> Each sensor family at a glance: ADS-B OK, RF SENSE 4/6, CIV REPORTS DEGRADED.</li>
+    <li><b>View switch.</b> PENUMBRA or LEGACY, the same data drawn the fielded way (<kbd>V</kbd>).</li>
+    <li><b>Operator and clock.</b> Your operator id, and the time of the picture (amber when replaying).</li>
+    <li><b>Contradiction register.</b> Open disagreements, newest first, each explained in a sentence.</li>
+    <li><b>Source reliability.</b> How trustworthy each source has proven, updated by confirmed and false reports.</li>
+    <li><b>The picture.</b> Contacts, uncertainty, coverage and flags on the EDDB layout. Click a contact to select it.</li>
+    <li><b>Legend.</b> Corroborated, contradicted, aged or ghost, no coverage.</li>
+    <li><b>Timeline.</b> Drag to see the picture as it stood at any past moment. Marks jump to key events.</li>
+    <li><b>Provenance.</b> The selected item's confidence and every source that makes it up.</li>
+    <li><b>Decisions.</b> Resolve or defer the selected contradiction (<kbd>R</kbd>, <kbd>D</kbd>).</li>
+  </ol>
+  <div class="foot"><span>The screen at a glance</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ READING I -->
+<section class="page">
+  <div class="label">03 · Reading the picture</div>
+  <h1>Confidence you can see</h1>
+  <p class="lead">A fielded picture draws a confirmed track and an unverified report with the same symbol. PENUMBRA draws how much evidence stands behind each contact.</p>
+  <div class="grid2">
+    <div>
+      <div class="crop" data-crop="535,578,822,640" data-w="82"></div>
+      <h3>Strong: four rings, crisp, full colour</h3>
+      <p>TRK-1147 over the ExpoCenter: four independent sensors agree, confidence 0.93.</p>
+    </div>
+    <div>
+      <div class="crop" data-crop="444,302,760,358" data-w="82"></div>
+      <h3>Weak: one ring, blurred, washed out</h3>
+      <p>TRK-1160: one degraded sensor, confidence 0.19. Same symbol type, very different picture.</p>
+    </div>
+  </div>
+  <h2>Three visual properties</h2>
+  <table>
+    <tr><th>Property</th><th>Means</th><th>How to read it</th></tr>
+    <tr><td>Ring count</td><td>Independent sources</td><td>One ring per independent source, up to four. Many reports from one sensor still count as one.</td></tr>
+    <tr><td>Edge sharpness</td><td>Confidence</td><td>Crisp edges mean high confidence; edges blur as confidence falls.</td></tr>
+    <tr><td>Colour strength</td><td>Confidence</td><td>Full colour when confident, fading towards grey when not. The symbol fades too.</td></tr>
+  </table>
+  <h2>Colours</h2>
+  <table>
+    <tr><th>Colour</th><th>Meaning</th></tr>
+    <tr><td><span class="swatch" style="background:var(--cyan)"></span>Cyan</td><td>Corroborated: at least two independent sources and confidence of at least 0.6.</td></tr>
+    <tr><td><span class="swatch" style="background:var(--orange)"></span>Orange</td><td>An unresolved contradiction, or a deception flag. Needs attention.</td></tr>
+    <tr><td><span class="swatch" style="background:var(--amber)"></span>Amber</td><td>The strongest source behind the contact is degraded.</td></tr>
+    <tr><td><span class="swatch" style="background:#969EB2"></span>Grey</td><td>A ghost (no recent fix), or a single weak source.</td></tr>
+    <tr><td><span class="swatch" style="background:#96D6B0"></span>Green</td><td>Civil aircraft reporting by transponder (ADS-B). Context, labelled small.</td></tr>
+  </table>
+  <h2>Where the number comes from</h2>
+  <p>Each report counts by <b>source reliability × report quality × age decay</b>. Each independent source gets one vote: its strongest report. The votes combine like independent chances, so agreeing sources compound and one weak report stays weak. The provenance panel shows each source's share, and the shares always add up to the number on screen.</p>
+  <div class="foot"><span>Reading the picture · confidence</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ READING II -->
+<section class="page">
+  <div class="label">04 · Reading the picture</div>
+  <h1>Age, disagreement, blindness</h1>
+  <div class="grid2" style="gap:5mm">
+    <div>
+      <div class="crop" data-crop="362,318,802,562" data-w="83"></div>
+      <h3>Ghosts: old information ages</h3>
+      <p>When fixes stop (after 30 s for a small drone), the contact becomes a <b>ghost</b>: a dashed symbol inside a dashed area showing where it is likely to be now. The area grows with time. A faint outer ring marks the furthest it could physically have flown. Ghosts stay for an hour, labelled with the age of the last fix.</p>
+    </div>
+    <div>
+      <div class="crop" data-crop="600,270,1000,545" data-w="83"></div>
+      <h3>Two readings, neither averaged away</h3>
+      <p>When sources disagree about a contact whose position is uncertain, each reading is drawn as a <b>hollow orange diamond</b> where its evidence puts it, linked by a dashed line: CAND-A (hobbyist, from an RF bearing) and CAND-B (coordinated pair, from two callers). A <b>wedge</b> marks a bearing-only report: the sensor knows the direction, not the distance. A well-tracked contact with an attribute conflict keeps one symbol and a tag, e.g. "TRK-1147 · CTR-003 DEFERRED".</p>
+    </div>
+  </div>
+  <div class="grid2" style="gap:5mm;margin-top:2mm">
+    <div>
+      <div class="crop" data-crop="322,688,720,795" data-w="83"></div>
+      <h3>Coverage: "cannot see" is not "nothing there"</h3>
+      <table>
+        <tr><td>Plain ground</td><td>Covered by a working drone sensor. Empty means empty.</td></tr>
+        <tr><td>Dense hatch</td><td>A sensor that covered it is down, e.g. "NO COVERAGE · SECTOR SW".</td></tr>
+        <tr><td>Faint hatch</td><td>No drone sensor has ever covered it.</td></tr>
+        <tr><td>Amber tint</td><td>Only degraded sensors see here.</td></tr>
+      </table>
+    </div>
+    <div>
+      <div class="crop" data-crop="735,392,1065,500" data-w="83"></div>
+      <h3>Deception flag</h3>
+      <p>Six or more low-reliability accounts reporting the same thing within 60 seconds, in one area, is not how independent witnesses behave. PENUMBRA raises a <b>deception flag</b> with lines to each report and <b>counts the burst as one vote, not six</b>: here the planted "swarm" scores 0.11 instead of 0.51. Nothing is deleted or marked false. The flag clears ten minutes after the last report.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Reading the picture · age, disagreement, coverage</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ PANELS -->
+<section class="page">
+  <div class="label">05 · The panels</div>
+  <h1>Register, sources, provenance</h1>
+  <div class="grid2" style="gap:6mm">
+    <div>
+      <h2 style="margin-top:0">Contradiction register</h2>
+      <p>Every disagreement between sources, newest first, written as a sentence: <i>"Two hypotheses for one contact. RF bearing says hobbyist; two civilian calls say coordinated pair."</i> Click a card to select its leading candidate.</p>
+      <table>
+        <tr><th>Status</th><th>Means</th></tr>
+        <tr><td style="color:var(--orange)">UNRESOLVED</td><td>Both readings live, no decision yet.</td></tr>
+        <tr><td>DEFERRED 04:12</td><td>An operator parked it; the timer counts up.</td></tr>
+        <tr><td>RESOLVED · HOBBYIST</td><td>Decided; the rejected reading is struck through.</td></tr>
+        <tr><td>REOPENED</td><td>Fresh evidence for a rejected reading arrived after the decision: decide again.</td></tr>
+        <tr><td>LAPSED</td><td>Support for all but one reading has decayed.</td></tr>
+      </table>
+      <h2>Source reliability</h2>
+      <p>How trustworthy each source has proven. It starts from a prior, moves up when police confirm a report and down when one is shown false. Bars are cyan from 0.75, amber from 0.40, orange below. Notes show DOWN, DEGRADED and the verdict count (<code>+1 −0</code>). After the first resolution, <b>OPERATOR</b> appears too: decisions are evidence, so they carry a reliability.</p>
+    </div>
+    <div>
+      <div class="crop" data-crop="1255,65,1592,640" data-w="78"></div>
+      <h2 style="margin-top:2mm">Provenance</h2>
+      <p>The big number is the selected item's confidence, <b>computed, not stored</b>: recalculated from the evidence every time you look. Below it, one card per source:</p>
+      <ul class="tight">
+        <li><b>Who and when:</b> <code>RF-SENSE-N · 14:39:04Z</code></li>
+        <li><b>What kind of report</b> in plain words, and its share: "Bearing only. Contributes +0.34"</li>
+        <li><b>The original text</b>, for human reports.</li>
+        <li><b>The factors:</b> reliability × quality × decay.</li>
+      </ul>
+      <p><b>Chain</b> shows the processing path, e.g. INGEST / SCRAPE → NL PARSE → CORRELATE → FUSION OUT → PENUMBRA. The releasability marking sits above the buttons.</p>
+    </div>
+  </div>
+  <div class="foot"><span>The panels</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ DECISIONS -->
+<section class="page">
+  <div class="label">06 · Taking decisions</div>
+  <h1>Resolve and defer</h1>
+  <p class="lead">Select a candidate, on the map or through its register card, and decide. Decisions go into the append-only log with your operator id and the time; nothing can be edited afterwards.</p>
+  <div class="grid2">
+    <div class="card cyan"><div class="num">RESOLVE · R</div><h3>Accept one reading</h3>
+      <ul class="tight" style="margin-bottom:0">
+        <li>Your decision becomes evidence for the accepted reading, from the source <b>OPERATOR</b> (reliability 0.80, fading over about half an hour). It appears as its own card in provenance.</li>
+        <li>Earlier reports for the rejected reading still say something is there, so they now count for the accepted one.</li>
+        <li>The rejected reading drops to zero.</li>
+      </ul></div>
+    <div class="card amber"><div class="num">DEFER · D</div><h3>Park it, knowingly</h3>
+      <ul class="tight" style="margin-bottom:0">
+        <li>No number changes. The status becomes DEFERRED with a running timer.</li>
+        <li>The contact keeps its own colour and carries a tag (e.g. "CTR-003 DEFERRED"), so it no longer competes for attention.</li>
+        <li>A deferred contradiction can still be resolved later; it cannot be deferred twice.</li>
+      </ul></div>
+  </div>
+  <h2>When a decision is reopened</h2>
+  <p>If fresh, live evidence for a rejected reading arrives after your decision, the contradiction reopens and returns to the register: the system does not quietly overrule new evidence. In the scenario, resolve CTR-004 before 14:39:10 and the third caller ("two of them, one following the other") reopens it.</p>
+  <h2>When a button is greyed out</h2>
+  <table>
+    <tr><th>Situation</th><th>Why</th></tr>
+    <tr><td>Whole contact selected, not a candidate</td><td>Resolve needs a reading: select CAND-A or CAND-B.</td></tr>
+    <tr><td>No open contradiction on the contact</td><td>Nothing to decide.</td></tr>
+    <tr><td>Replay mode</td><td>Decisions are taken at the live picture only. Press <kbd>End</kbd> to return.</td></tr>
+    <tr><td>Already resolved, already deferred</td><td>The server and the offline player refuse it with the same message.</td></tr>
+  </table>
+  <div class="note"><div class="t">Live and offline behave the same</div>In live mode the decision is sent to the feed server, written to its log and shown to every connected client; you get a confirmation such as "CTR-004 resolved as hobbyist · OP-1". Offline, the same rules apply locally. Set your operator id with <code>?op=OP-3</code>.</div>
+  <div class="foot"><span>Taking decisions</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ REPLAY -->
+<section class="page">
+  <div class="label">07 · Looking back</div>
+  <h1>Replay: exactly what was on screen</h1>
+  <p class="lead">Drag the timeline to any past moment and the picture is rebuilt exactly as it stood then, including the decisions taken up to that moment and none after.</p>
+  <div class="figure"><img src="../screens/m4-replay-1436.png" alt="Replay of 14:36"></div>
+  <div class="caption">Replay of 14:36:00 seen from 14:41:22 · CTR-003 still unresolved, RF 5/6, CTR-004 not yet open</div>
+  <div class="grid2">
+    <div>
+      <h3>Using the timeline</h3>
+      <ul class="tight">
+        <li><b>Drag</b> anywhere on the track. The right edge is live.</li>
+        <li><b>Marks</b> jump to key moments: <span style="color:var(--orange)">contradictions</span>, <b>decisions</b>, <span style="color:var(--amber)">sensor changes</span>, <span style="color:var(--cyan)">verdicts</span>, and deception flags (diamond).</li>
+        <li><b>5M · 15M · ALL</b> sets the window. Close marks stack in two rows.</li>
+        <li><kbd>←</kbd> <kbd>→</kbd> step 5 s; with <kbd>Shift</kbd>, 1 min. <kbd>End</kbd> or <kbd>Esc</kbd> returns to live.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>You cannot mistake it for live</h3>
+      <ul class="tight">
+        <li>Amber banner: "REPLAY 14:36:00Z · 05:22 behind live".</li>
+        <li>Amber clock tagged REPLAY, amber timeline.</li>
+        <li>Resolve and defer are disabled.</li>
+        <li>Playback continues underneath; "LIVE" brings you back to the current picture.</li>
+      </ul>
+      <p class="muted">Use it in after-action review: what could the operator see at the moment they decided?</p>
+    </div>
+  </div>
+  <div class="foot"><span>Looking back · replay</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ LEGACY -->
+<section class="page">
+  <div class="label">08 · The LEGACY view</div>
+  <h1>The same data, the fielded way</h1>
+  <p class="lead">Press <kbd>V</kbd> (or LEGACY in the header) to redraw the same moment by the rules fielded systems follow. It is a fair copy, built as a baseline for comparison, not a strawman.</p>
+  <div class="figure"><img src="../screens/m4-legacy-1441.png" alt="LEGACY view"></div>
+  <div class="caption">LEGACY view at 14:41:22 · same snapshot as the cover</div>
+  <table>
+    <tr><th>Fielded behaviour</th><th>What you see in LEGACY</th></tr>
+    <tr><td>One fused track per contact</td><td>CAND-A and CAND-B become one TRK-1155, labelled only "HOBBYIST".</td></tr>
+    <tr><td>Fusion picks a best estimate</td><td>The competing reading disappears; there is no contradiction register.</td></tr>
+    <tr><td>Uniform standard symbols</td><td>TRK-1160 (0.19, one degraded sensor) looks identical to TRK-1147 (0.93, four sensors).</td></tr>
+    <tr><td>No ageing, then a drop timer</td><td>Tracks look current until dropped after 5 minutes; the 41-minute ghost is gone.</td></tr>
+    <tr><td>No coverage, no adjudication</td><td>No blind sector; the planted posts appear as an ordinary "UAS · HOSTILE SWARM" track.</td></tr>
+    <tr><td>Track quality as metadata</td><td>Available as a number (e.g. 14 / 15) in track details, when you click a track. Not on the map.</td></tr>
+  </table>
+  <p>The panels change to what fielded systems show: a track list with update times, sensor status, and track details. Nothing a fielded system shows is hidden; nothing it lacks is added.</p>
+  <div class="foot"><span>The LEGACY view</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ PROBE -->
+<section class="page">
+  <div class="label">09 · Legibility probe</div>
+  <h1>Measure who reads it better</h1>
+  <p class="lead">A six-question test that measures how quickly and correctly people read the picture in each view. The results table is the evidence for the DIANA submission.</p>
+  <div class="grid2">
+    <div>
+      <div class="figure"><img src="../screens/m5-probe-trial.png" alt="Probe trial"></div>
+      <div class="caption">A trial in the LEGACY view</div>
+      <h3>The three questions, asked in both views</h3>
+      <ul class="tight">
+        <li>Which contact is the least reliable?</li>
+        <li>Where can we not see drones? (click a point)</li>
+        <li>Which track is the most out of date?</li>
+      </ul>
+      <p>Answers are clicks on the map, timed from the moment the picture is painted. "Can't tell" counts as wrong.</p>
+    </div>
+    <div>
+      <h3>Running a session</h3>
+      <ol style="padding-left:4.5mm;margin:0 0 3mm">
+        <li>Start <code>pnpm dev</code> so answers are stored on the server.</li>
+        <li>Open <b>http://127.0.0.1:5173/?probe</b>.</li>
+        <li>Enter the participant id and press <b>Start</b>.</li>
+        <li>For each trial: read the question, press <b>Show the picture</b>, click the answer.</li>
+        <li>The last screen shows the participant's result per view.</li>
+        <li>After all sessions: <code>pnpm probe:report</code>.</li>
+      </ol>
+      <h3>Why it is fair</h3>
+      <ul class="tight">
+        <li>Each person sees the two views at <b>different moments</b>, so the second view gains nothing from the first.</li>
+        <li>Which view comes first alternates between participant ids.</li>
+        <li>Right answers are <b>computed from the system's own picture</b> for the view shown, never written by hand.</li>
+      </ul>
+      <pre class="cmd">pnpm probe:report            <span class="c"># ./sessions</span>
+pnpm probe:report -- a.jsonl <span class="c"># downloads</span></pre>
+      <p>Prints a table per view and per question: answers, % correct, median time.</p>
+    </div>
+  </div>
+  <div class="note"><div class="t">Before real participants</div>Choose the groups (the plan names reservists, civil protection, air traffic and emergency operations), prepare a one-paragraph consent note, and pilot with two or three colleagues to check the questions read clearly. Automated test runs are robot clicks, not evidence.</div>
+  <div class="foot"><span>Legibility probe</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ DEMO -->
+<section class="page">
+  <div class="label">10 · Demo and recording</div>
+  <h1>Show it without touching it</h1>
+  <p class="lead">A captioned walkthrough that plays itself: for stands, briefings and the supplementary video.</p>
+  <div class="figure"><img src="../screens/m5-demo-epilogue.png" alt="Demo epilogue"></div>
+  <div class="caption">The demo's closing replay, captured at 1920 × 1080</div>
+  <div class="grid2">
+    <div>
+      <h3>Run it</h3>
+      <pre class="cmd">pnpm demo           <span class="c"># opens the browser</span>
+pnpm demo:record    <span class="c"># saves a video</span></pre>
+      <p>The demo restarts the scenario and plays the scripted ending: police confirm the hobbyist drone, OP-1 resolves CTR-004. Keys, transport and the view switch are locked so a stray key cannot derail it. Add <code>?capture=1080p</code> to render at exactly 1920 × 1080 for a screen recorder such as OBS.</p>
+      <h3>Record the real video on a laptop with a graphics chip</h3>
+      <p><code>pnpm demo:record</code> records in real time to <code>recordings/</code>. Without a graphics chip (cloud machines, some virtual machines) the frame rate is too low for a usable video.</p>
+    </div>
+    <div>
+      <h3>The walkthrough, about 4 minutes</h3>
+      <table>
+        <tr><td class="k">14:38:23</td><td>The event, the surge of reports</td></tr>
+        <tr><td class="k">14:38:40</td><td>TRK-1147: four sensors, four rings</td></tr>
+        <tr><td class="k">14:39:06</td><td>CAND-A vs CAND-B, neither averaged away</td></tr>
+        <tr><td class="k">14:39:40</td><td>TRK-1152, last seen 41 minutes ago</td></tr>
+        <tr><td class="k">14:40:07</td><td>A sensor fails; sector SW goes blind</td></tr>
+        <tr><td class="k">14:41:02</td><td>Six accounts, counted as one vote</td></tr>
+        <tr><td class="k">14:41:12</td><td>0.51 = 0.34 + 0.11 + 0.06</td></tr>
+        <tr><td class="k">14:41:24</td><td>Seven seconds of LEGACY</td></tr>
+        <tr><td class="k">14:41:34</td><td>Police confirm; OP-1 resolves</td></tr>
+        <tr><td class="k">after end</td><td>Replay of 14:36, closing line</td></tr>
+      </table>
+      <p class="muted">Captions and timing live in <code>apps/client/src/demo/director.ts</code>; changing a caption is a one-line text edit.</p>
+    </div>
+  </div>
+  <div class="foot"><span>Demo and recording</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ REFERENCE -->
+<section class="page">
+  <div class="label">11 · Reference</div>
+  <h1>Keys, URL options, commands</h1>
+  <div class="grid2" style="gap:6mm">
+    <div>
+      <h2 style="margin-top:0">Keyboard</h2>
+      <table>
+        <tr><td class="k"><kbd>Space</kbd></td><td>Play / pause</td></tr>
+        <tr><td class="k"><kbd>R</kbd></td><td>Resolve the selected candidate</td></tr>
+        <tr><td class="k"><kbd>D</kbd></td><td>Defer the selected contradiction</td></tr>
+        <tr><td class="k"><kbd>V</kbd></td><td>Switch PENUMBRA / LEGACY</td></tr>
+        <tr><td class="k"><kbd>←</kbd> <kbd>→</kbd></td><td>Replay 5 s back / forward</td></tr>
+        <tr><td class="k"><kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd></td><td>Replay 1 min back / forward</td></tr>
+        <tr><td class="k"><kbd>End</kbd> <kbd>Esc</kbd></td><td>Back to live</td></tr>
+      </table>
+      <h2>Commands (in <code>penumbra/</code>)</h2>
+      <table>
+        <tr><td class="k"><code>pnpm dev</code></td><td>Feed server and client</td></tr>
+        <tr><td class="k"><code>pnpm client</code></td><td>Client only (offline fallback)</td></tr>
+        <tr><td class="k"><code>pnpm feed</code></td><td>Feed server only (<code>--speed</code>, <code>--manual</code>, <code>--paused</code>)</td></tr>
+        <tr><td class="k"><code>pnpm demo</code></td><td>Captioned walkthrough</td></tr>
+        <tr><td class="k"><code>pnpm demo:record</code></td><td>Record the walkthrough</td></tr>
+        <tr><td class="k"><code>pnpm probe:report</code></td><td>Legibility probe results</td></tr>
+        <tr><td class="k"><code>pnpm frame</code></td><td>The key frame as text</td></tr>
+        <tr><td class="k"><code>pnpm shot</code></td><td>Screenshot to <code>docs/screens/</code></td></tr>
+        <tr><td class="k"><code>pnpm check</code></td><td>Type check and all tests</td></tr>
+        <tr><td class="k"><code>pnpm smoke</code></td><td>Live end-to-end browser test</td></tr>
+        <tr><td class="k"><code>pnpm build</code></td><td>Static client (runs offline)</td></tr>
+        <tr><td class="k"><code>pnpm manual</code></td><td>Rebuild this manual</td></tr>
+      </table>
+    </div>
+    <div>
+      <h2 style="margin-top:0">URL options</h2>
+      <p class="muted">Add to the address, e.g. <code>127.0.0.1:5173/?view=legacy&amp;speed=4</code></p>
+      <table>
+        <tr><td class="k"><code>?t=14:41:22</code></td><td>Offline, frozen at a moment</td></tr>
+        <tr><td class="k"><code>?mode=offline</code></td><td>Play in the browser, no server</td></tr>
+        <tr><td class="k"><code>?speed=4</code></td><td>Playback speed (up to 16)</td></tr>
+        <tr><td class="k"><code>?op=OP-3</code></td><td>Operator id for decisions</td></tr>
+        <tr><td class="k"><code>?view=legacy</code></td><td>Open in the LEGACY view</td></tr>
+        <tr><td class="k"><code>?replay=14:36:00</code></td><td>Open replaying a moment</td></tr>
+        <tr><td class="k"><code>?scripted</code></td><td>Offline: keep the scripted decisions</td></tr>
+        <tr><td class="k"><code>?probe</code></td><td>Legibility probe</td></tr>
+        <tr><td class="k"><code>?demo</code></td><td>Captioned walkthrough</td></tr>
+        <tr><td class="k"><code>?capture=1080p</code></td><td>Exactly 1920 × 1080, for recording</td></tr>
+        <tr><td class="k"><code>?stress=500&amp;stats</code></td><td>500 extra drones and an fps meter</td></tr>
+        <tr><td class="k"><code>?ws=…</code></td><td>Feed address (default: same machine)</td></tr>
+      </table>
+      <div class="note"><div class="t">Performance check</div>Open <code>?stress=500&amp;stats&amp;speed=4</code> on the demo laptop and read the fps meter while it plays. The target is 60 fps with 500 contacts.</div>
+    </div>
+  </div>
+  <div class="foot"><span>Reference</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ TROUBLESHOOTING / FILES / GLOSSARY -->
+<section class="page">
+  <div class="label">12 · Troubleshooting, files, glossary</div>
+  <h1>When something goes wrong</h1>
+  <table>
+    <tr><th>Symptom</th><th>Fix</th></tr>
+    <tr><td>"The token '&amp;&amp;' is not a valid statement separator"</td><td>Windows PowerShell 5.1: run the commands one per line.</td></tr>
+    <tr><td>"npm / pnpm is not recognized"</td><td>Install Node.js LTS from nodejs.org, open a new terminal, then <code>npm install -g pnpm</code>.</td></tr>
+    <tr><td>"running scripts is disabled on this system"</td><td><code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code>, or use <code>npm.cmd</code> / <code>pnpm.cmd</code>.</td></tr>
+    <tr><td>Port 5173 or 8787 already in use</td><td>Close the other program, or a previous PENUMBRA still running (<kbd>Ctrl</kbd>+<kbd>C</kbd> in its terminal).</td></tr>
+    <tr><td>Header says OFFLINE, not LIVE FEED</td><td>The feed server is not running: use <code>pnpm dev</code>, not <code>pnpm client</code>.</td></tr>
+    <tr><td>Map is slow or jerky</td><td>No graphics acceleration (virtual machine, remote desktop). Use a laptop with a graphics chip.</td></tr>
+    <tr><td>Resolve does nothing</td><td>Select a candidate (CAND-A / CAND-B), and make sure you are not in replay.</td></tr>
+  </table>
+  <div class="grid2" style="gap:6mm">
+    <div>
+      <h2>Files and logs</h2>
+      <table>
+        <tr><td class="k"><code>sessions/*.jsonl</code></td><td>Every operator interaction, one file per browser session</td></tr>
+        <tr><td class="k"><code>/log.jsonl</code></td><td>The server's append-only picture log (address of the feed server)</td></tr>
+        <tr><td class="k"><code>recordings/</code></td><td>Demo videos</td></tr>
+        <tr><td class="k"><code>docs/</code></td><td>Design notes per milestone, screenshots, this manual</td></tr>
+        <tr><td class="k"><code>scenarios/*.yaml</code></td><td>The scenario, editable without code</td></tr>
+      </table>
+      <p class="muted">Together, the session log and the picture log let you replay exactly what an operator saw next to what they did and when.</p>
+    </div>
+    <div>
+      <h2>Glossary</h2>
+      <table>
+        <tr><td>Confidence</td><td>How much evidence stands behind a contact or reading, 0 to 1.</td></tr>
+        <tr><td>Origin</td><td>An independent source: one sensor, one caller, one account.</td></tr>
+        <tr><td>Hypothesis</td><td>One reading of a contact (e.g. intent = hobbyist), labelled CAND-A, CAND-B.</td></tr>
+        <tr><td>Contradiction</td><td>Two readings with live support at once (CTR-nnn).</td></tr>
+        <tr><td>Ghost</td><td>A contact without a recent fix, drawn as a growing likely area.</td></tr>
+        <tr><td>Provenance</td><td>The sources behind a number, with their shares and processing chain.</td></tr>
+        <tr><td>Track quality</td><td>LEGACY's 0–15 number, shown only in track details.</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="foot"><span>Troubleshooting, files, glossary</span><span class="n"></span></div>
+</section>
+
+<!-- ============================================================ DATA / LIMITS -->
+<section class="page deep">
+  <div class="label">13 · Data, licences and limits</div>
+  <h1>What this prototype is, and is not</h1>
+  <div class="grid2" style="gap:5mm;margin-top:4mm">
+    <div class="card"><div class="num">DATA</div><h3>Synthetic, end to end</h3><p>The scenario, sensors, callsigns, callers and social accounts are invented. Correlation of reports to contacts is scripted. Use the screens to explain the concept, not to describe a real event.</p></div>
+    <div class="card"><div class="num">MAP</div><h3>EDDB layout, traced</h3><p>The airport layout is traced from "Airport Layout 08/2026" by R. Aehnelt via Wikimedia Commons (Creative Commons), credited on screen. <b>Confirm the exact licence before any public use</b>: a share-alike licence would apply to the traced map data. Not for navigation.</p></div>
+    <div class="card"><div class="num">STATUS</div><h3>Phase 0, not accredited</h3><p>A prototype for the NATO DIANA 2028 challenge call. No accreditation, no real sensor feeds, no access control. Do not use operationally or with real data.</p></div>
+    <div class="card"><div class="num">OPEN</div><h3>Known limits</h3><p>60 fps with 500 contacts is not yet measured on target hardware. Replaying very long sessions is slow. Some timeline marks overlap in the widest window. The probe has been tested by automation only, not with participants.</p></div>
+  </div>
+  <h2>Design decisions taken in review</h2>
+  <ul class="tight">
+    <li><b>A resolution is evidence.</b> The operator's decision counts towards the accepted reading and can be outweighed by fresh evidence (reopen).</li>
+    <li><b>A flagged burst is one vote.</b> The system never deletes or overrules reports; it refuses to count coordinated ones as independent.</li>
+    <li><b>Ghosts show the likely area,</b> with the physical maximum as a faint outer ring.</li>
+  </ul>
+  <div style="position:absolute;left:17mm;right:17mm;bottom:24mm;display:flex;justify-content:space-between;align-items:flex-end">
+    <div class="brand"><img src="assets/stratosphere-mark.png" alt=""><div>Stratosphere Solutions<br>Berlin · November 2026</div></div>
+    <div class="stamp">PENUMBRA Phase 0<br><span class="amber">Exercise · synthetic data</span></div>
+  </div>
+  <div class="foot"><span>Data, licences and limits</span><span class="n"></span></div>
+</section>
+
+<script>
+// Crops of the key-frame screenshot (coordinates in its 1600 x 900 frame), sized in mm.
+const SRC = "../screens/m4-penumbra-1441.png", FW = 1600, FH = 900, MM = 96 / 25.4;
+for (const el of document.querySelectorAll(".crop")) {
+  const [x0, y0, x1, y1] = el.dataset.crop.split(",").map(Number);
+  const w = Number(el.dataset.w) * MM, s = w / (x1 - x0);
+  Object.assign(el.style, {
+    width: `${w}px`, height: `${(y1 - y0) * s}px`,
+    backgroundImage: `url(${SRC})`, backgroundSize: `${FW * s}px ${FH * s}px`,
+    backgroundPosition: `${-x0 * s}px ${-y0 * s}px`,
+  });
+}
+</script>
+</body>
+</html>

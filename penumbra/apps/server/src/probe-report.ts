@@ -4,6 +4,9 @@
  *
  *   pnpm probe:report                     # every session in ./sessions
  *   pnpm probe:report -- a.jsonl b.jsonl  # specific files (e.g. downloaded offline sessions)
+ *
+ * Answers carry the scenario they were given on (BER, KMRB, ...); answers from
+ * before that field existed count as BER, the only scenario at the time.
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -11,7 +14,7 @@ import { join } from "node:path";
 export interface ProbeAnswerEvent {
   session?: string;
   kind: string;
-  data?: { participant?: string; view?: string; question?: string; correct?: boolean; latencyMs?: number; trial?: string };
+  data?: { participant?: string; scenario?: string; view?: string; question?: string; correct?: boolean; latencyMs?: number; trial?: string };
 }
 
 interface Cell {
@@ -32,21 +35,34 @@ export interface ProbeReport {
   answers: number;
   byView: Record<string, { n: number; accuracy: number; medianMs: number }>;
   byQuestion: Record<string, Record<string, { n: number; accuracy: number; medianMs: number }>>;
+  /** Scenario id -> view -> result. */
+  byScenario: Record<string, Record<string, { n: number; accuracy: number; medianMs: number }>>;
 }
+
+export const LEGACY_SCENARIO = "ber-south-uas-surge";
 
 export function probeReport(events: ProbeAnswerEvent[]): ProbeReport {
   // Last answer per participant and trial wins (a participant who reloads and retries counts once).
   const latest = new Map<string, ProbeAnswerEvent>();
   for (const e of events) {
     if (e.kind !== "probe_answer" || !e.data?.view || !e.data.question) continue;
-    latest.set(`${e.data.participant ?? e.session}\u0000${e.data.trial ?? `${e.data.view}-${e.data.question}`}`, e);
+    latest.set(`${e.data.participant ?? e.session}\u0000${e.data.scenario ?? LEGACY_SCENARIO}\u0000${e.data.trial ?? `${e.data.view}-${e.data.question}`}`, e);
   }
   const answers = [...latest.values()];
   const cell = (): Cell => ({ n: 0, correct: 0, ms: [] });
   const views = new Map<string, Cell>();
   const questions = new Map<string, Map<string, Cell>>();
+  const scenarios = new Map<string, Map<string, Cell>>();
   for (const a of answers) {
     const { view, question, correct, latencyMs } = a.data!;
+    const sc = a.data!.scenario ?? LEGACY_SCENARIO;
+    if (!scenarios.has(sc)) scenarios.set(sc, new Map());
+    const sv = scenarios.get(sc)!;
+    if (!sv.has(view!)) sv.set(view!, cell());
+    const scell = sv.get(view!)!;
+    scell.n++;
+    if (correct) scell.correct++;
+    if (typeof latencyMs === "number") scell.ms.push(latencyMs);
     for (const c of [views.get(view!) ?? (views.set(view!, cell()), views.get(view!)!)]) {
       c.n++;
       if (correct) c.correct++;
@@ -66,6 +82,7 @@ export function probeReport(events: ProbeAnswerEvent[]): ProbeReport {
     answers: answers.length,
     byView: Object.fromEntries([...views].map(([v, c]) => [v, fmt(c)])),
     byQuestion: Object.fromEntries([...questions].map(([q, m]) => [q, Object.fromEntries([...m].map(([v, c]) => [v, fmt(c)]))])),
+    byScenario: Object.fromEntries([...scenarios].map(([sc, m]) => [sc, Object.fromEntries([...m].map(([v, c]) => [v, fmt(c)]))])),
   };
 }
 
@@ -84,6 +101,16 @@ export function formatReport(r: ProbeReport): string {
     "|---|" + views.map(() => "---|").join(""),
     ...Object.entries(r.byQuestion).map(([q, m]) => `| ${q.replaceAll("_", " ")} | ` + views.map((v) => (m[v] ? `${pct(m[v]!.accuracy)} · ${s(m[v]!.medianMs)}` : "–")).join(" | ") + " |"),
   ];
+  // With more than one scenario (BER full network vs KMRB low-cost kit), compare them side by side.
+  const scs = Object.keys(r.byScenario).sort();
+  if (scs.length > 1) {
+    lines.push(
+      "",
+      "| Scenario | " + views.map((v) => `${v.toUpperCase()} correct · time`).join(" | ") + " |",
+      "|---|" + views.map(() => "---|").join(""),
+      ...scs.map((sc) => `| ${sc} | ` + views.map((v) => (r.byScenario[sc]![v] ? `${pct(r.byScenario[sc]![v]!.accuracy)} · ${s(r.byScenario[sc]![v]!.medianMs)}` : "–")).join(" | ") + " |"),
+    );
+  }
   return lines.join("\n");
 }
 

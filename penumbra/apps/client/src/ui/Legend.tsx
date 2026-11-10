@@ -21,12 +21,12 @@ export function Legend() {
   );
 }
 
-export function Banner() {
+export function Banner({ credit }: { credit: string }) {
   return (
     <div className="banner">
       <b>EXERCISE · SYNTHETIC DATA</b>
       <br />
-      LAYOUT © R. AEHNELT · WIKIMEDIA (CC)
+      {credit}
       <br />
       NOT FOR NAVIGATION
     </div>

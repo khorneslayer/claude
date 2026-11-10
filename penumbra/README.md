@@ -9,9 +9,10 @@ A confidence and decision-support layer above sensor fusion. It renders confiden
 - EDDB basemap: source, georeference, licence note: [docs/BASEMAP.md](docs/BASEMAP.md)
 - M4 time scrubber and LEGACY view: [docs/M4-NOTES.md](docs/M4-NOTES.md)
 - M5 session logs, legibility probe, demo and recording: [docs/M5-NOTES.md](docs/M5-NOTES.md)
+- KMRB low-cost scenario (regional airport, commercial kit, no radar): [docs/KMRB-LOWCOST.md](docs/KMRB-LOWCOST.md)
 - Dependencies and licences: [DEPENDENCIES.md](DEPENDENCIES.md)
 
-**All data is synthetic.** The airport layout is traced from R. Aehnelt's EDDB chart (Wikimedia Commons, CC); see [docs/BASEMAP.md](docs/BASEMAP.md). Not for navigation.
+**All data is synthetic.** The airport layouts are traced from R. Aehnelt's EDDB chart (Wikimedia Commons, CC; see [docs/BASEMAP.md](docs/BASEMAP.md)) and the KMRB FBO diagram (© ForeFlight; see [docs/KMRB-LOWCOST.md](docs/KMRB-LOWCOST.md#basemap)). Not for navigation.
 
 ## Status
 
@@ -48,7 +49,7 @@ Legibility probe: run `pnpm dev`, open http://127.0.0.1:5173/?probe, then `pnpm 
 
 On Windows PowerShell 5.1, run each command on its own line (`&&` is not supported).
 
-Client URL options: `?t=14:41:22` (freeze a moment), `?mode=offline`, `?speed=4`, `?op=OP-3`, `?scripted`, `?stress=500&stats` (performance check). `?view=legacy`, `?replay=14:36:00`, `?probe`, `?demo`, `?capture=1080p`. Keys: space play/pause, `R` resolve, `D` defer, `V` PENUMBRA / LEGACY, ← → replay (Shift = 1 min), End back to live. See [docs/M2-NOTES.md](docs/M2-NOTES.md).
+Client URL options: `?scenario=mrb` (KMRB low-cost scenario offline; default `ber`), `?t=14:41:22` (freeze a moment), `?mode=offline`, `?speed=4`, `?op=OP-3`, `?scripted`, `?stress=500&stats` (performance check). `?view=legacy`, `?replay=14:36:00`, `?probe`, `?demo`, `?capture=1080p`. Keys: space play/pause, `R` resolve, `D` defer, `V` PENUMBRA / LEGACY, ← → replay (Shift = 1 min), End back to live. See [docs/M2-NOTES.md](docs/M2-NOTES.md).
 
 ## Layout
 

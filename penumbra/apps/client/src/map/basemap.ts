@@ -1,11 +1,25 @@
 /**
- * Basemap: the EDDB layout traced from the R. Aehnelt chart (see ber-layout.ts),
- * plus a 1 km reference grid. No tiles, no network. Not for navigation.
+ * Basemaps: airport layouts traced from published charts (see ber-layout.ts,
+ * mrb-layout.ts), plus a 1 km reference grid. No tiles, no network. Not for
+ * navigation. The layout follows the scenario the feed announces.
  */
 import type { LonLat } from "../model/view";
+import { BER_LAYOUT } from "./ber-layout";
+import type { AirportLayout } from "./layout";
+import { MRB_LAYOUT } from "./mrb-layout";
 
-export { AREAS, LABELS, RUNWAYS, RUNWAY_SCREEN_ANGLE, TAXIWAYS, TAXIWAY_WIDTH_M, ARP, CHART_BOUNDS, type Area } from "./ber-layout";
-export const BASEMAP_CREDIT = "LAYOUT AFTER R. AEHNELT / WIKIMEDIA COMMONS (CC)";
+export type { AirportLayout, Area } from "./layout";
+
+/** Basemap per scenario id. */
+const LAYOUTS: Record<string, AirportLayout> = {
+  "ber-south-uas-surge": BER_LAYOUT,
+  "mrb-lowcost-approach": MRB_LAYOUT,
+};
+
+/** The layout for a scenario; BER for unknown ids, so an unlisted scenario still gets a map. */
+export function layoutFor(scenarioId: string | undefined): AirportLayout {
+  return (scenarioId && LAYOUTS[scenarioId]) || BER_LAYOUT;
+}
 
 /** 1 km reference grid across the bounds. */
 export function grid(bounds: { west: number; south: number; east: number; north: number }): LonLat[][] {

@@ -4,12 +4,13 @@
  *   pnpm frame                                  # key frame of the default scenario
  *   pnpm frame --at 14:39:30 --prov CAND-B
  *   pnpm frame --scenario path.yaml --seed 7 --manual
+ *   pnpm frame --scenario mrb                   # KMRB low-cost key frame
  */
 import { clockToMillis, project } from "@penumbra/core";
 import { compileScenario, loadScenarioFile } from "@penumbra/sim";
 import { parseArgs } from "node:util";
 import { formatFrame } from "./format";
-import { DEFAULT_SCENARIO } from "./paths";
+import { DEFAULT_SCENARIO, resolveScenario } from "./paths";
 
 const { values } = parseArgs({
   options: {
@@ -22,7 +23,7 @@ const { values } = parseArgs({
   },
 });
 
-const def = loadScenarioFile(values.scenario!);
+const def = loadScenarioFile(resolveScenario(values.scenario!));
 const compiled = compileScenario(def, {
   ...(values.seed !== undefined ? { seed: Number(values.seed) } : {}),
   manualOperator: values.manual!,

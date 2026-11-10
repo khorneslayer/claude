@@ -1,5 +1,7 @@
 # EDDB basemap
 
+> The second basemap, KMRB (Shepherd Field), is documented with its scenario in [KMRB-LOWCOST.md](KMRB-LOWCOST.md#basemap). Both implement the `AirportLayout` contract in `apps/client/src/map/layout.ts`; the client picks one by the scenario id the feed announces.
+
 ![key frame on the EDDB layout](screens/ber-keyframe-1441.png)
 
 ## Source

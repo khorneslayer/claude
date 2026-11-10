@@ -191,6 +191,14 @@ describe("project: contradictions", () => {
     expect([again.status, again.resolvedValue, again.reopened]).toEqual(["resolved", "coordinated-pair", undefined]);
   });
 
+  it("does not reopen when an origin the operator already overruled repeats itself", () => {
+    const b = conflict();
+    b.add({ kind: "operator_action", t: s(50), operatorId: "OP-1", action: "resolve", entityId: "C-1", dimension: "intent", value: "hobbyist" });
+    b.report(s(80), "CIV", "C-1", { origin: "CALLER-1", quality: 0.6, claims: { intent: "coordinated-pair" } });
+    const c = project(b.events, s(80)).contradictions[0]!;
+    expect([c.status, c.reopened, c.resolvedValue]).toEqual(["resolved", undefined, "hobbyist"]);
+  });
+
   it("can be switched back to resolution-as-record-only", () => {
     const b = new LogBuilder({ ...testConfig, operator: { ...testConfig.operator, resolutionIsEvidence: false } })
       .source("RF-N")

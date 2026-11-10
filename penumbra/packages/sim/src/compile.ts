@@ -57,6 +57,7 @@ const DEFAULT_CHAIN: Record<SourceType, string[]> = {
   RADAR: ["INGEST", "CORRELATE", "FUSION OUT"],
   CIV_CALL: ["INGEST", "NL PARSE", "CORRELATE", "FUSION OUT"],
   SOCIAL: ["SCRAPE", "NL PARSE", "CORRELATE", "FUSION OUT"],
+  REMOTE_ID: ["RID RX", "DECODE", "CORRELATE", "FUSION OUT"],
   OPERATOR: ["OPERATOR DECISION"],
 };
 const DEFAULT_EXTRACTION: Record<SourceType, Extraction> = {
@@ -66,6 +67,7 @@ const DEFAULT_EXTRACTION: Record<SourceType, Extraction> = {
   RADAR: "sensor",
   CIV_CALL: "human",
   SOCIAL: "ai",
+  REMOTE_ID: "sensor",
   OPERATOR: "human",
 };
 

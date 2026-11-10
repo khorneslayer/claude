@@ -2,7 +2,7 @@ import type { EntityClassParams, Extraction, ProjectionConfig, SourceStatus, Sou
 
 /**
  * Designer-facing scenario format. Authored in YAML; see
- * scenarios/ber-south-uas-surge.yaml for a worked example.
+ * scenarios/ber-south-uas-surge.yaml and scenarios/mrb-lowcost-approach.yaml for worked examples.
  *
  * Conventions: times are "HH:MM:SS" (UTC) on `date`; positions are [lat, lon].
  */
@@ -152,7 +152,7 @@ export type BeatKind = (typeof BEAT_KINDS)[number];
 // Validation: structural checks with messages a designer can act on.
 // ---------------------------------------------------------------------------
 
-const SOURCE_TYPES: SourceType[] = ["RF", "ADSB", "EO", "RADAR", "CIV_CALL", "SOCIAL"];
+const SOURCE_TYPES: SourceType[] = ["RF", "ADSB", "EO", "RADAR", "CIV_CALL", "SOCIAL", "REMOTE_ID"];
 const STATUSES: SourceStatus[] = ["up", "degraded", "down"];
 const CLOCK = /^\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z?$/;
 

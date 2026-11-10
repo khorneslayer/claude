@@ -11,7 +11,7 @@
 export type Millis = number;
 
 /** OPERATOR is virtual: operator resolutions enter the picture as evidence from it. */
-export type SourceType = "RF" | "ADSB" | "EO" | "RADAR" | "CIV_CALL" | "SOCIAL" | "OPERATOR";
+export type SourceType = "RF" | "ADSB" | "EO" | "RADAR" | "CIV_CALL" | "SOCIAL" | "REMOTE_ID" | "OPERATOR";
 export type SourceStatus = "up" | "degraded" | "down";
 /** How the content of an observation was produced. */
 export type Extraction = "sensor" | "human" | "ai";

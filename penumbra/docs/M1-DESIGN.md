@@ -88,7 +88,7 @@ Run `pnpm frame` to print this panel from the live engine.
   1. their judgement enters as a report from the virtual `OPERATOR` source (origin = the operator, reliability Beta(8, 2) = 0.8, half-life 30 min), asserting the accepted value. It is a visible row in provenance.
   2. reports that asserted a rejected value *before* the decision still say something is there, so they now count for the accepted reading.
   3. rejected hypotheses go to `status: "rejected"` with confidence 0.
-  4. if fresh, live evidence for a rejected value arrives *after* the decision, the contradiction **reopens** (`reopened: true`, back to unresolved) instead of being silently overruled. A new resolution settles it again.
+  4. if fresh, live evidence for a rejected value arrives *after* the decision, the contradiction **reopens** (`reopened: true`, back to unresolved) instead of being silently overruled. A new resolution settles it again. "Fresh" means from an origin that had not asserted that value before the decision: a source repeating the reading the operator overruled (a camera classifier saying "bird" every 2 s) does not reopen it.
 
   A deferral changes nothing. Consequence to watch: in the scenario the operator becomes CAND-A's largest contributor (+0.56 of 0.93). That's the echo effect, and it's tuned by the operator reliability. Switching the flag off restores record-only resolutions (tested).
 

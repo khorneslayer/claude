@@ -1,6 +1,6 @@
 import type { ProvenanceView } from "../model/panels";
 
-const TONE: Record<string, string> = { RF: "cyan", EO: "cyan", ADSB: "cyan", RADAR: "cyan", CIV_CALL: "amber", SOCIAL: "orange", OPERATOR: "white" };
+const TONE: Record<string, string> = { RF: "cyan", EO: "cyan", ADSB: "cyan", RADAR: "cyan", REMOTE_ID: "cyan", CIV_CALL: "amber", SOCIAL: "orange", OPERATOR: "white" };
 
 export function RightPanel(props: {
   view?: ProvenanceView;

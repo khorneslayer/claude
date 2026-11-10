@@ -151,7 +151,7 @@ function supportSummary(h: HypothesisView, lookup: ObsLookup): string {
   for (const a of h.assertedBy) counts.set(a.sourceType, (counts.get(a.sourceType) ?? 0) + 1);
   const parts = [...counts].map(([t, n]) => {
     if (t === "RF" && bearing && n === 1) return "RF BEARING";
-    const name = t === "CIV_CALL" ? "CIV CALL" : t === "SOCIAL" ? "SOCIAL" : t;
+    const name = t === "CIV_CALL" ? "CIV CALL" : t === "REMOTE_ID" ? "REMOTE ID" : t;
     return n === 1 ? `1 ${name}` : `${n} ${name}S`;
   });
   return parts.join(" + ");

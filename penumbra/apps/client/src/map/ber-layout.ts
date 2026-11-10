@@ -11,9 +11,9 @@
  *   anchor    chart ARP N 52 22' 00" E 13 30' 12" at the midpoint of the runway centres
  */
 import { offsetM, type LatLon } from "@penumbra/core";
+import type { AirportLayout, Area, LonLat, MapLabel, Px, Runway, Taxiway } from "./layout";
 
-export type Px = [number, number];
-export type LonLat = [number, number];
+export type { Area, LonLat, MapLabel, Px, Runway, Taxiway } from "./layout";
 
 export const ARP: LatLon = { lat: 52 + 22 / 60, lon: 13 + 30 / 60 + 12 / 3600 };
 const ARP_PX: Px = [1056, 960];
@@ -50,14 +50,6 @@ const rect = (x0: number, y0: number, x1: number, y1: number): Px[] => [
 
 // ---------------------------------------------------------------- runways
 
-export interface Runway {
-  id: string;
-  label: string;
-  widthM: number;
-  path: LonLat[];
-  ends: { designator: string; heading: string; position: LonLat; outward: LonLat }[];
-}
-
 const RWY_N = { w: [705, 647] as Px, e: [1878, 647] as Px };
 const RWY_S = { w: [165, 1272] as Px, e: [1475, 1272] as Px };
 
@@ -88,11 +80,6 @@ export const RUNWAYS: Runway[] = [
 export const RUNWAY_SCREEN_ANGLE = 90 - RIGHT_BEARING;
 
 // ---------------------------------------------------------------- taxiways
-
-export interface Taxiway {
-  id: string;
-  path: LonLat[];
-}
 
 const TAXIWAY_PX: Record<string, Px[]> = {
   // between the runways, north side
@@ -141,12 +128,6 @@ export const TAXIWAYS: Taxiway[] = Object.entries(TAXIWAY_PX).map(([id, pts]) =>
 export const TAXIWAY_WIDTH_M = 23;
 
 // ---------------------------------------------------------------- aprons, buildings
-
-export interface Area {
-  id: string;
-  polygon: LonLat[];
-  kind: "apron" | "building" | "terminal" | "outline";
-}
 
 const AREA_PX: { id: string; kind: Area["kind"]; px: Px[] }[] = [
   // aprons
@@ -201,13 +182,6 @@ export const AREAS: Area[] = AREA_PX.map((a) => ({ id: a.id, kind: a.kind, polyg
 
 // ---------------------------------------------------------------- labels
 
-export interface MapLabel {
-  text: string;
-  position: LonLat;
-  kind: "major" | "minor" | "taxiway" | "runway";
-  angle?: number;
-}
-
 const L = (text: string, p: Px, kind: MapLabel["kind"], angle?: number): MapLabel => ({ text, position: ll(p), kind, ...(angle !== undefined ? { angle } : {}) });
 
 export const LABELS: MapLabel[] = [
@@ -251,3 +225,17 @@ export const CHART_BOUNDS = { sw: ll([100, 1330]), ne: ll([1940, 140]) };
 
 /** The traced geometry in chart pixels, for overlay checks against the source chart. */
 export const TRACE = { runways: [RWY_N, RWY_S], taxiways: TAXIWAY_PX, areas: AREA_PX };
+
+export const BER_LAYOUT: AirportLayout = {
+  icao: "EDDB",
+  ARP,
+  RUNWAYS,
+  TAXIWAYS,
+  TAXIWAY_WIDTH_M,
+  AREAS,
+  LABELS,
+  RUNWAY_SCREEN_ANGLE,
+  CHART_BOUNDS,
+  FIT_KM: { west: 3.4, south: 3.0, east: 2.9, north: 2.9 },
+  credit: "LAYOUT © R. AEHNELT · WIKIMEDIA (CC)",
+};

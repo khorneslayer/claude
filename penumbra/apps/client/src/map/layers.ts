@@ -6,7 +6,7 @@ import type { Bounds } from "../model/coverage";
 import type { Placement } from "../model/place";
 import type { Envelope, FlagMarker, Glyph, Link, LonLat, RenderModel, Wedge } from "../model/view";
 import { C, rgba, type RGB } from "../theme";
-import { AREAS, grid, LABELS, RUNWAYS, TAXIWAY_WIDTH_M, TAXIWAYS, type Area } from "./basemap";
+import { grid, layoutFor, type AirportLayout, type Area } from "./basemap";
 import { ConfidenceRingLayer } from "./ConfidenceRingLayer";
 import { HATCH_MAPPING, hatchAtlas } from "./hatch";
 import { diamondIcon, legacyIcon, symbolIcon } from "./symbols";
@@ -109,11 +109,12 @@ export function buildCoverageLayers(cov: Coverage, bounds: Bounds, zoom: number,
   return layers;
 }
 
-/** EDDB basemap traced from the R. Aehnelt chart. Build once per bounds. */
 /** Zoom at which each class of basemap label appears, so the picture is never buried in chart text. */
 const LABEL_MIN_ZOOM = { major: 0, runway: 12.5, minor: 14.2, taxiway: 14.8 } as const;
 
-export function buildStaticLayers(bounds: Bounds, zoom = 13): Layer[] {
+/** The airport basemap (traced chart layout). Build once per bounds and zoom bucket. */
+export function buildStaticLayers(bounds: Bounds, zoom = 13, layout: AirportLayout = layoutFor(undefined)): Layer[] {
+  const { AREAS, LABELS, RUNWAYS, TAXIWAYS, TAXIWAY_WIDTH_M } = layout;
   const fill = (a: Area) =>
     a.kind === "apron" ? rgba(C.apron, 255) : a.kind === "terminal" ? rgba(C.building, 230) : a.kind === "building" ? rgba(C.building, 170) : rgba(C.apron, 0);
   const ends = RUNWAYS.flatMap((r) => r.ends);
@@ -178,7 +179,7 @@ export function buildStaticLayers(bounds: Bounds, zoom = 13): Layer[] {
       stroked: true,
     }),
     new PathLayer<Area, PathStyleExtensionProps<Area>>({
-      id: "expocenter-outline",
+      id: "event-outline",
       data: AREAS.filter((a) => a.kind === "outline"),
       getPath: (d) => d.polygon,
       getColor: rgba(C.dim, 170),

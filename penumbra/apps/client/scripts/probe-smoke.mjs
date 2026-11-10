@@ -4,6 +4,7 @@
  * "Can't tell" on one, then check the summary and the session log.
  *
  *   pnpm --filter @penumbra/client probe:smoke
+ *   PROBE_SCENARIO=mrb pnpm probe:smoke        # the same on the KMRB low-cost scenario
  */
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
@@ -21,6 +22,8 @@ const FEED_PORT = String(9300 + Math.floor(Math.random() * 300));
 const root = resolve(here, "../../..");
 const tsx = resolve(root, "node_modules/tsx/dist/cli.mjs");
 const sessionsDir = mkdtempSync(join(tmpdir(), "penumbra-probe-"));
+const SCENARIO = process.env.PROBE_SCENARIO ?? "ber";
+const SCENARIO_ID = { ber: "ber-south-uas-surge", mrb: "mrb-lowcost-approach" }[SCENARIO];
 
 let failed = false;
 const check = (ok, msg) => {
@@ -58,7 +61,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
-  await page.goto(`http://127.0.0.1:${PORT}/?probe`);
+  await page.goto(`http://127.0.0.1:${PORT}/?probe&scenario=${SCENARIO}`);
   await page.getByRole("dialog", { name: "Legibility probe" }).waitFor({ timeout: 30000 });
   await page.getByLabel("Participant id").fill("P-SMOKE");
   await page.getByRole("button", { name: "Start" }).click();
@@ -103,6 +106,7 @@ try {
   check(answers.length === 6, `six answers recorded (${answers.length})`);
   check(answers.filter((a) => a.data.correct).length === 5, `five correct, one "can't tell" (${answers.map((a) => (a.data.correct ? "✓" : "✗")).join(" ")})`);
   check(answers.every((a) => a.data.latencyMs > 0), "every answer has a latency");
+  check(answers.every((a) => a.data.scenario === SCENARIO_ID), `every answer names its scenario (${SCENARIO_ID})`);
   check(new Set(answers.map((a) => a.data.at)).size === 2 && new Set(answers.map((a) => a.data.view)).size === 2, "both views, at two different moments");
   check(events.some((e) => e.kind === "probe_done"), "probe_done recorded with the summary");
   check(rows.length === 2 && rows.some((r) => /PENUMBRA/.test(r)) && rows.some((r) => /LEGACY/.test(r)), `summary table: ${rows.map((r) => r.replace(/\s+/g, " ")).join(" | ")}`);

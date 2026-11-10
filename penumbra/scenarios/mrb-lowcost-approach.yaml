@@ -1,0 +1,292 @@
+# PENUMBRA Phase 0 comparison scenario: a regional airport with a LOW-COST kit
+#
+# Eastern WV Regional / Shepherd Field (KMRB), Martinsburg WV. One runway, a
+# general-aviation FBO, a business jet on approach and a public event under
+# the runway 26 approach. No radar, no sensor network: the airport bought a
+# commercial off-the-shelf kit:
+#
+#   1 passive RF detector (FBO roof)       bearing only, hears control links, deaf to autonomous drones
+#   3 commercial cameras (PTZ / thermal)   2 on the approaches, 1 on the north ramp; short range, the
+#                                          classifier confuses birds and drones
+#   1 Remote ID receiver                   sees only compliant drones that broadcast (cooperative)
+#   1 ADS-B receiver                       cooperative aircraft
+#   public call line + social scrape       as at BER
+#
+# The question this scenario answers for the pitch: does the confidence layer
+# keep the picture honest when the sensors are cheap and few? The same key
+# frame time as BER (14:41:22) so the legibility probe can compare the two.
+#
+# ALL DATA IS SYNTHETIC. The event, callsigns, sensors, callers and accounts
+# are invented; only the airport layout is real (traced from the FBO airport
+# diagram, see apps/client/src/map/mrb-layout.ts). Times are HH:MM:SS UTC
+# (local EDT = UTC-4). Positions are [lat, lon].
+#
+# Structure
+#   13:55 - 14:38:22  history
+#   14:38:22          live playback starts
+#   14:41:22          key frame
+#   14:41:52          end: drone confirmed, CTR-005 resolved, the arrival breaks off at 14:41:31
+
+id: mrb-lowcost-approach
+title: KMRB / RWY 26 APPROACH / LOW-COST KIT
+date: "2026-09-12"
+seed: 2210
+
+window:
+  logStart: "13:55:00"
+  playFrom: "14:38:22"
+  keyFrame: "14:41:22"
+  end: "14:41:52"
+
+area:
+  center: [39.4019, -77.9847]     # ARP N 39 24' 07" W 077 59' 05" (approximate)
+  label: KMRB / SHEPHERD FIELD
+
+config:
+  contradictionIdStart: 5
+  activeWeightEpsilon: 0.05
+  visibleConfidenceFloor: 0.02
+  defaultClass: UAS_SMALL
+  deception:
+    lowReliabilityBelow: 0.5
+    minReports: 6
+    burstSpanS: 60
+    radiusM: 3000
+    retainS: 600
+    collapseFlaggedOrigins: true
+  operator:
+    resolutionIsEvidence: true
+    reliability: { alpha: 8, beta: 2 }
+    halfLifeS: 1800
+
+classes:
+  UAS_SMALL:
+    cruiseSpeedMps: 15
+    maxSpeedMps: 23
+    headingPersistenceS: 5
+    enduranceS: 1800
+    ghostAfterS: 30
+    retainGhostS: 3600
+  UAS_REPORTED:
+    cruiseSpeedMps: 8
+    maxSpeedMps: 23
+    headingPersistenceS: 5
+    enduranceS: 1800
+    ghostAfterS: 600
+    retainGhostS: 3600
+  AIRCRAFT_CIVIL:
+    cruiseSpeedMps: 70
+    maxSpeedMps: 260
+    headingPersistenceS: 60
+    enduranceS: 36000
+    ghostAfterS: 20
+    retainGhostS: 300
+
+sources:
+  - id: RF-DET-1
+    type: RF
+    label: RF DETECTOR (FBO ROOF)
+    reliability: { alpha: 8.5, beta: 1.5 }     # 0.85: a good link classifier, but one antenna = bearing only
+    halfLifeS: 300
+    position: [39.3999, -77.9838]
+    coverageLayers: [uas]                      # honest about range, silent about drones with no control link
+    footprint:
+      circle: { radiusM: 2500 }
+  - id: CAM-26
+    type: EO
+    label: CAM-26 APPROACH (PTZ/THERMAL)
+    reliability: { alpha: 6, beta: 3 }         # 0.67: commercial classifier, birds vs drones
+    halfLifeS: 120
+    position: [39.4057, -77.9695]              # runway 26 threshold, looking out along the approach
+    coverageLayers: [uas]
+    footprint:
+      sector: { radiusM: 1500, fromDeg: 35, toDeg: 110 }
+  - id: CAM-08
+    type: EO
+    label: CAM-08 APPROACH (PTZ/THERMAL)
+    reliability: { alpha: 6, beta: 3 }
+    halfLifeS: 120
+    position: [39.3981, -77.9999]              # runway 08 threshold, looking out along the approach
+    coverageLayers: [uas]
+    footprint:
+      sector: { radiusM: 1500, fromDeg: 205, toDeg: 295 }
+  - id: CAM-RAMP
+    type: EO
+    label: CAM-RAMP NORTH (PTZ)
+    reliability: { alpha: 6, beta: 3 }
+    halfLifeS: 120
+    position: [39.4061, -77.9863]              # mast on the north edge of the north ramp, looking south
+    coverageLayers: [uas]
+    footprint:
+      sector: { radiusM: 600, fromDeg: 80, toDeg: 280 }
+  - id: RID-RX
+    type: REMOTE_ID
+    label: REMOTE ID RECEIVER
+    reliability: { alpha: 9, beta: 1 }         # 0.90: self-reported positions, spoofable
+    halfLifeS: 60
+    position: [39.4000, -77.9836]
+    coverageLayers: [cooperative]              # sees only drones that choose to broadcast
+    footprint:
+      circle: { radiusM: 2500 }                # Bluetooth 5 long range / Wi-Fi beacon, mast antenna
+  - id: ADS-B-RX
+    type: ADSB
+    label: ADS-B RECEIVER
+    reliability: { alpha: 22, beta: 3 }
+    halfLifeS: 30
+    coverageLayers: [cooperative]
+    footprint:
+      circle: { center: [39.4019, -77.9847], radiusM: 40000 }
+  - id: CIV-CALL-LINE
+    type: CIV_CALL
+    label: CIV CALL LINE
+    reliability: { alpha: 5, beta: 7 }         # 0.42
+    halfLifeS: 600
+  - id: SOCIAL-SCRAPE
+    type: SOCIAL
+    label: SOCIAL SCRAPE
+    reliability: { alpha: 2, beta: 9 }         # 0.18 prior, 0.17 after one falsified report
+    halfLifeS: 900
+
+tracks:
+  # TRK-2205: an autonomous drone crosses the north ramp, seen only by CAM-RAMP,
+  # and leaves behind the camera. RF never hears it: it has no control link.
+  trk-2205:
+    - { at: "14:33:00", lat: 39.4036, lon: -77.9842, altM: 60 }
+    - { at: "14:33:45", lat: 39.4049, lon: -77.9854, altM: 60 }
+    - { at: "14:34:20", lat: 39.4060, lon: -77.9862, altM: 65 }   # passes under the mast: out of the camera's view
+    - { at: "14:35:00", lat: 39.4082, lon: -77.9865, altM: 70 }
+    - { at: "14:35:45", lat: 39.4105, lon: -77.9869, altM: 70 }
+  # TRK-2210: loitering over the public event, 1 km out on the runway 26 approach, about 90 m up.
+  trk-2210:
+    - { at: "14:37:00", lat: 39.4085, lon: -77.9585, altM: 85 }
+    - { at: "14:38:30", lat: 39.4088, lon: -77.9577, altM: 90 }
+    - { at: "14:40:00", lat: 39.4081, lon: -77.9581, altM: 95 }
+    - { at: "14:41:00", lat: 39.4083, lon: -77.9591, altM: 90 }
+    - { at: "14:42:00", lat: 39.4085, lon: -77.9585, altM: 85 }
+  # TRK-2214: a compliant hobby drone south-west of the 08 approach, broadcasting Remote ID.
+  trk-2214:
+    - { at: "14:25:00", lat: 39.3926, lon: -78.0073, altM: 60 }
+    - { at: "14:33:00", lat: 39.3932, lon: -78.0085, altM: 70 }
+    - { at: "14:38:00", lat: 39.3929, lon: -78.0079, altM: 70 }
+    - { at: "14:42:00", lat: 39.3932, lon: -78.0085, altM: 65 }
+  # Cooperative: business jet on a straight-in approach to runway 26, broken off once the drone is confirmed.
+  eja519:
+    - { at: "14:38:30", lat: 39.4472, lon: -77.8086, altM: 800 }
+    - { at: "14:40:00", lat: 39.4288, lon: -77.8804, altM: 450 }
+    - { at: "14:41:22", lat: 39.4119, lon: -77.9456, altM: 130 }   # 2.2 km out, ~17 s from the contact
+    - { at: "14:41:31", lat: 39.4104, lon: -77.9527, altM: 150 }   # breaks off: climbing left turn
+    - { at: "14:41:38", lat: 39.4113, lon: -77.9582, altM: 230 }
+    - { at: "14:41:45", lat: 39.4142, lon: -77.9625, altM: 320 }
+    - { at: "14:41:52", lat: 39.4181, lon: -77.9652, altM: 400 }
+
+beats:
+  # ---------------------------------------------------------------- history
+  - at: "14:10:00"
+    note: Social post claims a drone over the north ramp; it is false
+    report:
+      id: soc-ramp
+      source: SOCIAL-SCRAPE
+      origin: SOC-ACCT-311
+      entity: TRK-2190
+      class: UAS_REPORTED
+      position: [39.4045, -77.9850]
+      sigmaM: 600
+      quality: 0.7
+      text: "drone buzzing the hangars at the airport"
+  - at: "14:15:00"
+    note: Airport police find nothing; SOCIAL-SCRAPE reliability drops to 0.17
+    verify: { ref: soc-ramp, outcome: falsified, by: AIRPORT-POLICE }
+
+  - at: "14:25:00"
+    note: A compliant hobby drone starts broadcasting Remote ID south-west of the field
+    periodic: { source: RID-RX, origin: RID-1581F5FJ, entity: TRK-2214, class: UAS_SMALL, track: trk-2214, until: "14:41:52", everyS: 3, jitterS: 0.3, sigmaM: 15, quality: 0.85 }
+  - at: "14:25:20"
+    periodic: { source: RF-DET-1, entity: TRK-2214, class: UAS_SMALL, track: trk-2214, until: "14:41:52", everyS: 6, jitterS: 0.5, sigmaM: 300, quality: 0.5, bearingOnly: { sigmaDeg: 3 } }
+  - at: "14:26:00"
+    periodic: { source: CAM-08, entity: TRK-2214, class: UAS_SMALL, track: trk-2214, until: "14:40:04", everyS: 2, jitterS: 0.3, sigmaM: 30, quality: 0.6 }
+
+  - at: "14:33:00"
+    note: CAM-RAMP sees a drone cross the north ramp; RF-DET-1 hears nothing (autonomous flight)
+    periodic: { source: CAM-RAMP, entity: TRK-2205, class: UAS_SMALL, track: trk-2205, until: "14:33:58", everyS: 2, jitterS: 0.3, sigmaM: 30, quality: 0.6 }
+
+  - at: "14:36:00"
+    status: { source: CAM-RAMP, status: degraded, note: "sun glare, auto-iris hunting" }
+
+  - at: "14:37:00"
+    note: CAM-26 tracks an object over the event; its classifier calls it a bird
+    periodic: { source: CAM-26, entity: TRK-2210, class: UAS_SMALL, track: trk-2210, until: "14:41:52", everyS: 2, jitterS: 0.3, sigmaM: 30, quality: 0.6, claims: { object: bird } }
+
+  # ---------------------------------------------------------------- live playback
+  - at: "14:38:30"
+    periodic: { source: ADS-B-RX, origin: ADSB-A7F21C, entity: EJA519, class: AIRCRAFT_CIVIL, track: eja519, until: "14:41:52", everyS: 1, sigmaM: 15, quality: 0.95 }
+
+  - at: "14:39:00"
+    note: RF-DET-1 hears a drone control link on the bearing of the event; contradiction CTR-005 opens
+    report:
+      id: rf-link
+      source: RF-DET-1
+      entity: TRK-2210
+      class: UAS_SMALL
+      track: trk-2210
+      bearingOnly: { sigmaDeg: 3 }
+      sigmaM: 300
+      quality: 0.6
+      claims: { object: small-uas }
+      text: "consumer control-link signature, bearing 058"
+  - at: "14:39:06"
+    periodic: { source: RF-DET-1, entity: TRK-2210, class: UAS_SMALL, track: trk-2210, until: "14:41:52", everyS: 6, jitterS: 0.5, sigmaM: 300, quality: 0.6, bearingOnly: { sigmaDeg: 3 }, claims: { object: small-uas } }
+
+  - at: "14:38:40"
+    note: Civilian call 1 - a drone over the houses south of the airport, where no drone sensor reaches
+    report:
+      source: CIV-CALL-LINE
+      origin: CALLER-1
+      entity: TRK-2220
+      class: UAS_REPORTED
+      position: [39.3741, -77.9751]
+      sigmaM: 500
+      quality: 0.5
+      text: "there's a drone hovering over the houses by the school, south of the airport"
+
+  - at: "14:39:12"
+    note: Civilian call 2 - the same area, no detail
+    report:
+      source: CIV-CALL-LINE
+      origin: CALLER-2
+      entity: TRK-2220
+      class: UAS_REPORTED
+      position: [39.3753, -77.9726]
+      sigmaM: 600
+      quality: 0.47
+      text: "drone over the neighbourhood, heading towards the airport I think"
+
+  - at: "14:40:05"
+    note: CAM-08 drops off the network; the 08 approach loses its camera
+    status: { source: CAM-08, status: down, note: "network link lost (PoE switch)" }
+
+  - at: "14:40:20"
+    note: Six accounts post near-identical swarm claims within 40 s - deception flag
+    burst:
+      source: SOCIAL-SCRAPE
+      entity: TRK-2230
+      class: UAS_REPORTED
+      count: 6
+      spanS: 40
+      position: [39.3978, -77.9818]     # the T-hangars and east complex, south of the FBO
+      scatterM: 200
+      sigmaM: 300                      # "at the airport" pins a post to a few hundred metres at a field this small
+      quality: 0.7
+      claims: { intent: hostile-swarm }
+      originPrefix: SOC-ACCT-7
+      text:
+        - "DRONE SWARM over Martinsburg airport right now"
+        - "drone swarm at the airport!!"
+        - "swarm of drones over the airport terminal"
+
+  # ---------------------------------------------------------------- after the key frame
+  - at: "14:41:26"
+    note: The tower sees the drone with binoculars, on the approach over the event
+    verify: { ref: rf-link, outcome: confirmed, by: TWR-VISUAL }
+  - at: "14:41:30"
+    note: OP-1 resolves CTR-005 as a drone; the tower breaks the arrival off (scripted in the ADS-B track)
+    operator: { operator: OP-1, action: resolve, entity: TRK-2210, dimension: object, value: small-uas }

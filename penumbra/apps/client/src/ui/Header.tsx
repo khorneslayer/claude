@@ -1,8 +1,8 @@
 import { formatClock, type FeedHealth } from "@penumbra/core";
 import type { FeedStatus, FeedStore } from "../feed/store";
 
-const NAMES: Partial<Record<FeedHealth["sourceType"], string>> = { ADSB: "ADS-B", RF: "RF SENSE", EO: "EO", CIV_CALL: "CIV REPORTS" };
-const ORDER = ["ADSB", "RF", "EO", "CIV_CALL"];
+const NAMES: Partial<Record<FeedHealth["sourceType"], string>> = { ADSB: "ADS-B", RF: "RF SENSE", EO: "EO", REMOTE_ID: "REMOTE ID", CIV_CALL: "CIV REPORTS" };
+const ORDER = ["ADSB", "RF", "EO", "REMOTE_ID", "CIV_CALL"];
 
 export function feedChips(health: FeedHealth[]) {
   return ORDER.flatMap((type) => {

@@ -3,11 +3,12 @@
  *
  *   pnpm dev                                      # default scenario, live at 1x
  *   pnpm feed --speed 4 --manual --port 9000
+ *   pnpm feed --scenario mrb                      # KMRB, low-cost kit (or a path to any scenario YAML)
  */
 import { formatClock } from "@penumbra/core";
 import { compileScenario, loadScenarioFile } from "@penumbra/sim";
 import { parseArgs } from "node:util";
-import { DEFAULT_SCENARIO, SESSIONS_DIR } from "./paths";
+import { DEFAULT_SCENARIO, resolveScenario, SESSIONS_DIR } from "./paths";
 import { PenumbraServer } from "./server";
 
 const { values } = parseArgs({
@@ -24,7 +25,7 @@ const { values } = parseArgs({
   },
 });
 
-const def = loadScenarioFile(values.scenario!);
+const def = loadScenarioFile(resolveScenario(values.scenario!));
 const compiled = compileScenario(def, {
   ...(values.seed !== undefined ? { seed: Number(values.seed) } : {}),
   manualOperator: values.manual!,

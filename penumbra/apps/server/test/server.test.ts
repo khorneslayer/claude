@@ -251,5 +251,19 @@ describe("probe report", () => {
     expect(r.byView.penumbra).toEqual({ n: 2, accuracy: 1, medianMs: 2500 });
     expect(r.byView.legacy).toEqual({ n: 2, accuracy: 0.5, medianMs: 6000 });
     expect(formatReport(r)).toContain("| PENUMBRA | 2 | 100 % | 2.5 s |");
+    expect(formatReport(r)).not.toContain("| Scenario |");
+  });
+
+  it("keeps the same participant's BER and KMRB answers apart and compares the scenarios", async () => {
+    const { probeReport, formatReport } = await import("../src/probe-report");
+    const a = (scenario: string | undefined, view: string, correct: boolean, latencyMs: number) => ({
+      kind: "probe_answer",
+      data: { participant: "P1", ...(scenario ? { scenario } : {}), view, question: "blind", correct, latencyMs, trial: `${view}-blind` },
+    });
+    const r = probeReport([a(undefined, "legacy", false, 8000), a("mrb-lowcost-approach", "legacy", true, 4000), a("mrb-lowcost-approach", "penumbra", true, 2000)]);
+    expect(r.answers).toBe(3);
+    expect(r.byScenario["ber-south-uas-surge"]!.legacy).toEqual({ n: 1, accuracy: 0, medianMs: 8000 });
+    expect(r.byScenario["mrb-lowcost-approach"]!.penumbra).toEqual({ n: 1, accuracy: 1, medianMs: 2000 });
+    expect(formatReport(r)).toContain("| mrb-lowcost-approach | 100 % · 2.0 s | 100 % · 4.0 s |");
   });
 });

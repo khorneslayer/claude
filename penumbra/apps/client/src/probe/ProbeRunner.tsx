@@ -19,6 +19,8 @@ const VIEW_NAME: Record<ProbeView, string> = { penumbra: "PENUMBRA", legacy: "LE
  */
 export function ProbeRunner(props: {
   date: string;
+  /** Scenario id, logged with every answer so BER and KMRB results stay apart. */
+  scenario: string;
   arp: LatLon;
   recorder: SessionRecorder;
   snapshotAt: (t: number) => PictureSnapshot;
@@ -26,7 +28,7 @@ export function ProbeRunner(props: {
   setReplay: (t: number | undefined) => void;
   registerClick: (fn: ((c: ProbeClick) => void) | null) => void;
 }) {
-  const { date, arp, recorder, snapshotAt, setView, setReplay, registerClick } = props;
+  const { date, scenario, arp, recorder, snapshotAt, setView, setReplay, registerClick } = props;
   const [participant, setParticipant] = useState(() => `P-${Math.random().toString(36).slice(2, 6).toUpperCase()}`);
   const [phase, setPhase] = useState<Phase>({ kind: "intro" });
   const [results, setResults] = useState<ProbeResult[]>([]);
@@ -72,7 +74,7 @@ export function ProbeRunner(props: {
       const correct = score(t.question, a, snap, t.view, arp);
       const exp = expected(t.question, snap, t.view, arp).note;
       const r: ProbeResult = { trial: t, correct, latencyMs, answer: a, expected: exp };
-      recorder.log("probe_answer", { participant, trial: t.id, index: t.index, view: t.view, at: t.at, question: t.question, answer: a, correct, latencyMs, expected: exp });
+      recorder.log("probe_answer", { participant, scenario, trial: t.id, index: t.index, view: t.view, at: t.at, question: t.question, answer: a, correct, latencyMs, expected: exp });
       setResults((rs) => [...rs, r]);
       const next = ph.i + 1;
       if (next < trials.length) setPhase({ kind: "ready", i: next });
@@ -82,7 +84,7 @@ export function ProbeRunner(props: {
         setView("penumbra");
       }
     },
-    [trials, snapshotAt, date, arp, recorder, participant, setReplay, setView],
+    [trials, snapshotAt, date, scenario, arp, recorder, participant, setReplay, setView],
   );
 
   useEffect(() => {

@@ -3,6 +3,7 @@
  *
  *   pnpm demo:record                 # real time (about 4 minutes), best on a machine with a GPU
  *   pnpm demo:record -- --speed 4    # faster run (for checking the cues)
+ *   pnpm demo:record -- --scenario mrb   # the KMRB low-cost scenario
  *
  * Output: recordings/penumbra-demo-<timestamp>.webm (git-ignored).
  */
@@ -15,7 +16,7 @@ import { parseArgs } from "node:util";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../../..");
-const { values } = parseArgs({ options: { speed: { type: "string", default: "1" }, out: { type: "string" } } });
+const { values } = parseArgs({ options: { speed: { type: "string", default: "1" }, out: { type: "string" }, scenario: { type: "string", default: "ber" } } });
 const speed = Number(values.speed);
 const { chromium } = createRequire(import.meta.url)("playwright");
 const FEED_PORT = String(9600 + Math.floor(Math.random() * 300));
@@ -42,7 +43,7 @@ const outDir = resolve(root, "recordings");
 mkdirSync(outDir, { recursive: true });
 try {
   // Scripted feed (the scenario's own operator decisions), paused until the demo starts it.
-  await start([tsx, "apps/server/src/main.ts", "--port", FEED_PORT, "--paused", "--no-sessions"], root, /websocket/);
+  await start([tsx, "apps/server/src/main.ts", "--scenario", values.scenario, "--port", FEED_PORT, "--paused", "--no-sessions"], root, /websocket/);
   await start([resolve(here, "../node_modules/vite/bin/vite.js"), "--port", WEB_PORT, "--strictPort", "--host", "127.0.0.1"], resolve(here, ".."), /Local/, {
     PENUMBRA_FEED: `http://127.0.0.1:${FEED_PORT}`,
   });
@@ -53,12 +54,14 @@ try {
   const budgetMs = ((210 / speed) + 30) * 1000;
   const t0 = Date.now();
   await page.waitForFunction(() => window.__penumbra?.demoDone === true, null, { timeout: budgetMs, polling: 1000 });
-  const cues = await page.evaluate(() => window.__penumbra.recorder.events.filter((e) => e.kind === "demo_cue").length);
+  const cueEvents = await page.evaluate(() => window.__penumbra.recorder.events.filter((e) => e.kind === "demo_cue").map((e) => e.data));
+  const cues = cueEvents.length;
+  if (process.env.DEMO_CUES) for (const c of cueEvents) console.log(`  ${typeof c.at === "string" ? c.at : `+${c.at.afterEndS}s`}  ${c.caption ?? ""}`);
   const video = page.video();
   await context.close();
   await browser.close();
   const raw = await video.path();
-  const out = values.out ? resolve(values.out) : join(outDir, `penumbra-demo-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.webm`);
+  const out = values.out ? resolve(values.out) : join(outDir, `penumbra-demo-${values.scenario}-${new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)}.webm`);
   renameSync(raw, out);
   console.log(`recorded ${cues} cues in ${((Date.now() - t0) / 1000).toFixed(0)} s -> ${out}`);
 } finally {

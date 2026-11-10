@@ -1,6 +1,6 @@
 import { clockToMillis, createRng, offsetM, validateOperatorAction, type DraftEvent, type LogEvent, type Millis, type OperatorActionRequest } from "@penumbra/core";
 import { compileScenario, parseScenario, type CompiledScenario } from "@penumbra/sim/browser";
-import scenarioText from "../../../../scenarios/ber-south-uas-surge.yaml?raw";
+import { SCENARIOS, type ScenarioKey } from "../scenarios";
 import type { FeedSource, FeedStore } from "./store";
 
 const TICK_MS = 100;
@@ -12,10 +12,10 @@ const TICK_MS = 100;
  */
 export function startOffline(
   store: FeedStore,
-  opts: { at?: string; atEnd?: boolean; speed?: number; paused?: boolean; stress?: number; scripted?: boolean } = {},
+  opts: { scenario?: ScenarioKey; at?: string; atEnd?: boolean; speed?: number; paused?: boolean; stress?: number; scripted?: boolean } = {},
 ): FeedSource {
   // Interactive by default: decisions from playback onwards are the operator's.
-  const compiled: CompiledScenario = compileScenario(parseScenario(scenarioText), { manualOperator: !opts.scripted });
+  const compiled: CompiledScenario = compileScenario(parseScenario(SCENARIOS[opts.scenario ?? "ber"].text), { manualOperator: !opts.scripted });
   const { meta } = compiled;
   const events = opts.stress ? withStress(compiled, opts.stress) : compiled.events;
   let head = meta.playFrom;
@@ -94,7 +94,8 @@ export function startOffline(
 function withStress(compiled: CompiledScenario, n: number): LogEvent[] {
   const { meta, events } = compiled;
   const rng = createRng(4242);
-  const sensors = ["RF-SENSE-N", "RF-SENSE-C", "RF-SENSE-S"];
+  // The scenario's first three drone sensors (RF-SENSE-N/C/S at BER).
+  const sensors = events.flatMap((e) => (e.kind === "source_registered" && e.coverageLayers?.includes("uas") ? [e.sourceId] : [])).slice(0, 3);
   const extra: DraftEvent[] = [];
   for (let i = 0; i < n; i++) {
     const origin = offsetM(meta.area.center, rng.range(-6000, 6000), rng.range(-4500, 4500));

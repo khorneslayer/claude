@@ -402,12 +402,16 @@ export class Projector {
       const key = `${o.entityId}\u0000${dim}`;
       const existing = this.contradictions.get(key);
       // Fresh, live evidence for a value the operator rejected reopens the question.
+      // "Fresh" means from an origin that had not already asserted that value when
+      // the operator decided: a camera classifier repeating the reading the
+      // operator overruled is not new information.
       if (
         existing?.resolution &&
         existing.reopenedT === undefined &&
         value !== existing.resolution.value &&
         o.t > existing.resolution.t &&
-        this.weigh(o, o.t).weight >= this.config.activeWeightEpsilon
+        this.weigh(o, o.t).weight >= this.config.activeWeightEpsilon &&
+        !ent.obs.some((p) => p.originId === o.originId && p.claims[dim] === value && p.t <= existing.resolution!.t)
       ) {
         existing.reopenedT = o.t;
       }
@@ -585,18 +589,31 @@ export class Projector {
       if (ent.falsified >= ent.obs.length) continue;
       const confidence = this.breakdown(this.bestPerOrigin([ent.all], now));
 
+      // Position: the latest fix, except that a bearing-only fix (one sensor,
+      // no range) does not displace a recent precise fix that is still the
+      // tighter of the two once both are grown to now.
       let fix: ObservationEvent | undefined;
+      let bearingFix: ObservationEvent | undefined;
       let entityClass: string | undefined;
       let lastObsT: Millis | undefined;
       for (let i = ent.obs.length - 1; i >= 0 && (!fix || !entityClass || lastObsT === undefined); i--) {
         const o = ent.obs[i]!;
         if (this.verdicts.get(o.obsId) === "falsified") continue;
         if (lastObsT === undefined) lastObsT = o.t;
-        if (!fix && o.position) fix = o;
+        // A precise fix ten minutes older than the bearing cannot be the tighter one: stop looking.
+        if (!fix && bearingFix && o.t < bearingFix.t - 600_000) break;
+        if (!fix && o.position) {
+          if (o.bearing) bearingFix ??= o;
+          else fix = o;
+        }
         if (!entityClass && o.entityClass) entityClass = o.entityClass;
       }
       const cls = entityClass ?? config.defaultClass;
       const params = classParams(cls);
+      if (bearingFix) {
+        const grown = (o: ObservationEvent) => uncertaintyEnvelope((now - o.t) / 1000, o.position!.sigmaM, params).plausibleM;
+        if (!fix || grown(bearingFix) <= grown(fix)) fix = bearingFix;
+      }
       const fixAgeS = fix ? (now - fix.t) / 1000 : undefined;
       const retainedGhost = fixAgeS !== undefined && fixAgeS <= params.retainGhostS;
       if (confidence.value < config.visibleConfidenceFloor && !retainedGhost) continue;

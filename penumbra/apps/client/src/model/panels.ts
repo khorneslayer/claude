@@ -75,7 +75,7 @@ function who(types: Partial<Record<SourceType | "UNKNOWN", number>>, bearing: bo
   for (const [t, n] of Object.entries(types) as [SourceType | "UNKNOWN", number][]) {
     total += n;
     const noun =
-      t === "CIV_CALL" ? ["civilian call", "civilian calls"] : t === "SOCIAL" ? ["social post", "social posts"] : t === "OPERATOR" ? ["the operator", "operators"] : t === "RF" && bearing ? ["RF bearing", "RF bearings"] : [t, `${t} sensors`];
+      t === "CIV_CALL" ? ["civilian call", "civilian calls"] : t === "SOCIAL" ? ["social post", "social posts"] : t === "OPERATOR" ? ["the operator", "operators"] : t === "RF" && bearing ? ["RF bearing", "RF bearings"] : t === "REMOTE_ID" ? ["Remote ID broadcast", "Remote ID broadcasts"] : [t, `${t} sensors`];
     parts.push(n === 1 ? (t === "OPERATOR" ? noun[0]! : t === "CIV_CALL" || t === "SOCIAL" ? `one ${noun[0]}` : noun[0]!) : `${count(n)} ${noun[1]}`);
   }
   return { text: parts.join(" and "), plural: total > 1 };
@@ -210,6 +210,7 @@ function describe(c: Contribution, look: Lookups): string {
   if (c.extraction === "ai") return `${c.reliability < 0.4 ? "Low reliability, " : ""}AI-extracted.`;
   if (c.sourceType === "CIV_CALL") return "Unverified voice report.";
   if (c.sourceType === "ADSB") return "Cooperative transponder report.";
+  if (c.sourceType === "REMOTE_ID") return "Self-reported Remote ID position (spoofable).";
   return o?.position ? `${c.sourceType} fix ±${Math.round(o.position.sigmaM)}m.` : `${c.sourceType} report.`;
 }
 

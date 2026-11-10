@@ -21,13 +21,17 @@ import { RightPanel, Toast } from "./ui/Provenance";
 import { LeftPanel } from "./ui/Register";
 import { Stats } from "./ui/Stats";
 import { Caption } from "./demo/Captions";
-import { cuesBetween, DEMO_CUES, epilogue, type Cue } from "./demo/director";
+import { cuesBetween, demoCuesFor, epilogue, type Cue } from "./demo/director";
+import { layoutFor } from "./map/basemap";
+import { scenarioKey } from "./scenarios";
 import { ProbeRunner, type ProbeClick } from "./probe/ProbeRunner";
 import { SessionRecorder } from "./session/recorder";
 
 /**
  * URL parameters
  *   ?mode=offline        play the scenario in the browser (no server)
+ *   ?scenario=mrb        offline scenario: ber (Berlin Brandenburg, default) or mrb (KMRB, low-cost kit);
+ *                        a live feed plays whatever scenario the server was started with
  *   ?t=14:41:22          offline, frozen at that moment (screenshots, briefings)
  *   ?speed=4             initial playback speed
  *   ?ws=ws://host/ws     feed URL (default: same origin /ws, proxied to the server in dev)
@@ -50,6 +54,7 @@ const STRESS = params.get("stress") ? Number(params.get("stress")) : undefined;
 const SHOW_STATS = params.has("stats");
 const OPERATOR = params.get("op") ?? "OP-1";
 const SCRIPTED = params.has("scripted");
+const SCENARIO = scenarioKey(params.get("scenario"));
 /** Mock releasability marking (slide 6, item 08): visible without opening a dialogue. */
 const MARKING = "EXERCISE · SYNTHETIC DATA · REL DEU/NLD (MOCK)";
 export type ViewMode = "penumbra" | "legacy";
@@ -122,6 +127,7 @@ export function App() {
     recorder.log("session_start", { params: Object.fromEntries(params), operator: OPERATOR, userAgent: navigator.userAgent });
     const offline = () =>
       startOffline(store, {
+        scenario: SCENARIO,
         ...(FROZEN_AT ? { at: FROZEN_AT, paused: true } : {}),
         ...(PROBE ? { atEnd: true, paused: true } : {}),
         ...(speed ? { speed } : {}),
@@ -279,18 +285,19 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [covKey, bounds, meta]);
 
-  // Fit the airport (about 6 x 5 km around the ARP) to the map pane.
+  // Fit the airport (its layout says how far around the ARP, about 6 x 6 km) to the map pane.
   const initialViewState = useMemo(() => {
     if (!meta || !mapSize) return undefined;
     const km = boundsAround(meta.area.center, 1);
     const kmLon = (km.east - km.west) / 2;
     const kmLat = (km.north - km.south) / 2;
     const c = meta.area.center;
+    const fitKm = layoutFor(meta.id).FIT_KM;
     const { width, height } = mapSize;
     const fit = new WebMercatorViewport({ width, height }).fitBounds(
       [
-        [c.lon - 3.4 * kmLon, c.lat - 3.0 * kmLat],
-        [c.lon + 2.9 * kmLon, c.lat + 2.9 * kmLat],
+        [c.lon - fitKm.west * kmLon, c.lat - fitKm.south * kmLat],
+        [c.lon + fitKm.east * kmLon, c.lat + fitKm.north * kmLat],
       ],
       { padding: Math.min(40, width / 20) },
     );
@@ -469,18 +476,19 @@ export function App() {
     if (!DEMO || !liveSnap || !meta) return;
     const prev = lastHead.current;
     lastHead.current = liveSnap.t;
-    for (const c of cuesBetween(DEMO_CUES, prev, liveSnap.t, (clock) => clockToMillis(meta.date, clock))) applyCue(c);
+    for (const c of cuesBetween(demoCuesFor(meta.id), prev, liveSnap.t, (clock) => clockToMillis(meta.date, clock))) applyCue(c);
   }, [liveSnap?.t, meta, applyCue]);
   const ended = store.clock?.ended ?? false;
   useEffect(() => {
     if (!DEMO || !ended) return;
-    const timers = epilogue(DEMO_CUES).map((c) => setTimeout(() => applyCue(c), c.at.afterEndS * 1000));
+    const timers = epilogue(demoCuesFor(meta?.id)).map((c) => setTimeout(() => applyCue(c), c.at.afterEndS * 1000));
     return () => timers.forEach(clearTimeout);
-  }, [ended, applyCue]);
+  }, [ended, applyCue, meta?.id]);
 
   // Three layer groups with different lifetimes, so a 10 Hz tick never re-tessellates static geometry.
   const zoomBucket = viewState ? Math.round(viewState.zoom * 4) / 4 : 13;
-  const staticLayers = useMemo(() => (bounds ? buildStaticLayers(bounds, zoomBucket) : []), [bounds, zoomBucket]);
+  const layout = useMemo(() => layoutFor(meta?.id), [meta?.id]);
+  const staticLayers = useMemo(() => (bounds ? buildStaticLayers(bounds, zoomBucket, layout) : []), [bounds, zoomBucket, layout]);
   const sinceBucket = lostLabel && snap ? Math.floor((snap.t - lostLabel.since) / 1000) : 0;
   const coverageLayers = useMemo(() => {
     if (!snap || !bounds) return [];
@@ -558,7 +566,7 @@ export function App() {
         )}
         {view === "penumbra" && <Legend />}
         {view === "legacy" && <div className="legacy-banner">LEGACY VIEW · SAME DATA AS A FIELDED COP</div>}
-        <Banner />
+        <Banner credit={layout.credit} />
         {replayT !== undefined && head !== undefined && snap && !LOCKED && <ReplayBanner t={snap.t} head={head} onLive={() => setReplayT(undefined)} />}
         {head !== undefined && logStart !== undefined && snap && !PROBE && (
           <Timeline
@@ -579,6 +587,7 @@ export function App() {
         {PROBE && meta && (
           <ProbeRunner
             date={meta.date}
+            scenario={meta.id}
             arp={meta.area.center}
             recorder={recorder}
             snapshotAt={(t) => store.snapshotAt(t)}

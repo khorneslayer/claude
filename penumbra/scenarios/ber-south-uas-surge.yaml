@@ -170,15 +170,16 @@ tracks:
     - { at: "14:40:00", lat: 52.3830, lon: 13.5640, altM: 110 }
     - { at: "14:42:00", lat: 52.3860, lon: 13.5560, altM: 110 }
   # Cooperative traffic
-  dlh4kt:                          # departure 25R, westbound
-    - { at: "14:38:30", lat: 52.3800, lon: 13.5400, altM: 0 }
-    - { at: "14:39:20", lat: 52.3850, lon: 13.4950, altM: 300 }
-    - { at: "14:40:30", lat: 52.3930, lon: 13.4100, altM: 1200 }
-    - { at: "14:42:00", lat: 52.4100, lon: 13.2900, altM: 2400 }
-  ezy91hb:                         # arrival 25L from the east, then taxi
-    - { at: "14:36:00", lat: 52.4000, lon: 13.7500, altM: 1800 }
-    - { at: "14:39:50", lat: 52.3640, lon: 13.5650, altM: 0 }
-    - { at: "14:41:52", lat: 52.3620, lon: 13.5450, altM: 0 }
+  dlh4kt:                          # departure 25R (north runway), straight out on 250
+    - { at: "14:38:30", lat: 52.3830, lon: 13.5420, altM: 0 }
+    - { at: "14:39:20", lat: 52.3750, lon: 13.5060, altM: 300 }
+    - { at: "14:40:30", lat: 52.3553, lon: 13.4175, altM: 1200 }
+    - { at: "14:42:00", lat: 52.3149, lon: 13.2379, altM: 2400 }
+  ezy91hb:                         # arrival 25L (south runway) from the east, then rollout
+    - { at: "14:36:00", lat: 52.4094, lon: 13.7579, altM: 900 }
+    - { at: "14:39:50", lat: 52.3665, lon: 13.5640, altM: 0 }
+    - { at: "14:40:40", lat: 52.3597, lon: 13.5336, altM: 0 }
+    - { at: "14:41:52", lat: 52.3590, lon: 13.5300, altM: 0 }
 
 beats:
   # ---------------------------------------------------------------- history

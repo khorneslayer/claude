@@ -3,7 +3,7 @@ import WebSocket from "ws";
 import { clockToMillis } from "@penumbra/core";
 import { compileScenario, loadScenarioFile } from "@penumbra/sim";
 import { DEFAULT_SCENARIO } from "../src/paths";
-import type { ClientMsg, ServerMsg, SnapshotMsg } from "../src/protocol";
+import type { ClientMsg, ServerMsg, SnapshotMsg } from "@penumbra/sim";
 import { PenumbraServer } from "../src/server";
 
 const def = loadScenarioFile(DEFAULT_SCENARIO);

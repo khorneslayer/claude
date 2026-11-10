@@ -1,5 +1,5 @@
 import type { LogEvent, Millis, PictureSnapshot } from "@penumbra/core";
-import type { ScenarioMeta } from "@penumbra/sim";
+import type { ScenarioMeta } from "./compile";
 
 /** Bumped on any breaking change to the messages below. */
 export const PROTOCOL_VERSION = 1;

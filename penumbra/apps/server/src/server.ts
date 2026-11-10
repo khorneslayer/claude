@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { EventLog, project, Projector, type DraftEvent, type LogEvent, type Millis, type PictureSnapshot } from "@penumbra/core";
 import type { CompiledScenario } from "@penumbra/sim";
 import { WebSocketServer, type WebSocket } from "ws";
-import { PROTOCOL_VERSION, type ClientMsg, type ClockState, type ServerMsg } from "./protocol";
+import { PROTOCOL_VERSION, type ClientMsg, type ClockState, type ServerMsg } from "@penumbra/sim";
 
 export interface ServerOptions {
   compiled: CompiledScenario;

@@ -12,7 +12,7 @@ A confidence and decision-support layer above sensor fusion. It renders confiden
 
 | Milestone | Scope | State |
 |---|---|---|
-| M1 | data model, confidence engine, scenario engine, WS stream, tests | done, awaiting review |
+| M1 | data model, confidence engine, scenario engine, WS stream, tests | done, reviewed |
 | M2 | map rendering of the four conditions + deception flag | |
 | M3 | panels + RESOLVE / DEFER | |
 | M4 | time scrubber + LEGACY toggle | |
@@ -24,7 +24,7 @@ Requires Node ≥ 22 and pnpm 10.
 
 ```bash
 pnpm install
-pnpm check          # typecheck + 78 tests
+pnpm check          # typecheck + tests
 pnpm frame          # print the slide 7 key frame (14:41:22Z) as text
 pnpm frame --at 14:39:30 --prov TRK-1155:CAND-B
 pnpm dev            # live feed on ws://127.0.0.1:8787/ws

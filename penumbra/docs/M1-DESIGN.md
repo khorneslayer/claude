@@ -84,7 +84,13 @@ Run `pnpm frame` to print this panel from the live engine.
 - A **contradiction opens** the first time two values on the same dimension both have live support (some origin's weight ≥ `activeWeightEpsilon`, 0.05). Its ID (`CTR-nnn`) is assigned in order of opening and is stable.
 - **CAND labels are scoped to their contradiction.** At opening, CAND-A goes to the leading hypothesis, and values that join later take the next letter. This is what puts the RF "hobbyist" reading at CAND-A even though the civilian "coordinated pair" call came first.
 - **Status:** `unresolved` → `deferred` / `resolved` from operator actions. **`lapsed`** is new (not in the brief). It applies when support for all but one value has decayed, so the conflict isn't live any more, even though nobody resolved it.
-- **REVIEW: operator decisions don't change confidence.** Resolve and defer are recorded with who and when, and they clear the `CONTRADICTED` flag, but the evidence maths is untouched. A resolution is a judgement, not new evidence, and folding it into confidence would make the picture echo the operator back to themselves. M2 has to decide how a resolved-against hypothesis is drawn (dimmed, hidden, or kept).
+- **DECIDED: a resolution is evidence** (`operator.resolutionIsEvidence`, on by default). When an operator resolves a contradiction:
+  1. their judgement enters as a report from the virtual `OPERATOR` source (origin = the operator, reliability Beta(8, 2) = 0.8, half-life 30 min), asserting the accepted value. It is a visible row in provenance.
+  2. reports that asserted a rejected value *before* the decision still say something is there, so they now count for the accepted reading.
+  3. rejected hypotheses go to `status: "rejected"` with confidence 0.
+  4. if fresh, live evidence for a rejected value arrives *after* the decision, the contradiction **reopens** (`reopened: true`, back to unresolved) instead of being silently overruled. A new resolution settles it again.
+
+  A deferral changes nothing. Consequence to watch: in the scenario the operator becomes CAND-A's largest contributor (+0.56 of 0.93). That's the echo effect, and it's tuned by the operator reliability. Switching the flag off restores record-only resolutions (tested).
 
 ## 5. Ghosts and the uncertainty envelope
 
@@ -93,7 +99,7 @@ Once a contact's last positional fix is older than its class's `ghostAfterS`, it
 - `envelopeRadiusM`: where it plausibly is now. A correlated random walk (Ornstein–Uhlenbeck velocity) at cruise speed, with exact variance `2v²τ(t − τ(1 − e^(−t/τ)))`.
 - `maxReachM`: where it could physically be. Max speed × min(age, endurance), which is the brief's "kinematic bound capped by endurance".
 
-**REVIEW.** The brief asked for the kinematic bound. For a small drone lost for 41 minutes, that bound is 41.5 km, which fills the map and tells the operator nothing. The random-walk envelope gives 2.4 km, which matches slide 7. M2 should draw the plausible envelope and show the hard bound faintly or on hover.
+**DECIDED:** M2 draws the plausible envelope as the ghost's area and the hard kinematic bound as a faint outer ring. (The brief's bound alone is 41.5 km for a drone lost 41 minutes ago, which fills the map. The random-walk envelope gives 2.4 km, matching slide 7.)
 
 A ghost stays on the picture for `retainGhostS` after its last fix, even once its confidence has decayed to near zero. The snapshot also reports `confidenceAtLastFix` (0.51 for TRK-1152), so the label can read "last conf 41m".
 
@@ -101,7 +107,9 @@ A ghost stays on the picture for `retainGhostS` after its last fix, even once it
 
 A flag is raised when at least `minReports` (6) **distinct origins** from sources below `lowReliabilityBelow` (0.5) arrive within `burstSpanS` (60 s), all within `radiusM` (3 km) of their centroid. Reports that have already been verified are excluded. A flag lasts `retainS` (600 s) after the burst's last report.
 
-**The flag never changes confidence** (tested). In the scenario, six planted "swarm" posts lift TRK-1170 to 0.51 with six "sources". That inflation is exactly what planted reports achieve, and the flag is what makes it visible. **REVIEW:** should a flagged burst count as one origin? It's defensible, but it is adjudication, which the deck rules out ("the system does not adjudicate truth").
+**DECIDED: a flagged burst casts one shared vote** (`deception.collapseFlaggedOrigins`, on by default). While the flag is raised, every origin in the burst counts as a single vote (id = the flag id), carried by the burst's strongest report. Provenance shows it as one row listing the merged origins. In the scenario, the six planted swarm posts would otherwise lift TRK-1170 to 0.51 with "6 sources". Collapsed, it reads 0.11 from 1 source, with the flag still raised. When the flag expires, the origins vote independently again.
+
+Note this is a deliberate step past the deck's "the system does not adjudicate truth". Nothing is deleted or marked false; the system only declines to treat a suspiciously synchronised cluster as independent corroboration. The pitch wording should change to match, for example: "the system never deletes or overrules reports; it refuses to count coordinated ones as independent." Limitation: CAND labels are assigned during the fold, before flags exist, so label order ignores collapsing.
 
 ## 7. Coverage
 
@@ -143,7 +151,7 @@ The live path fits a 4 Hz feed with headroom. **For M4:** scrubbing a long, dens
 
 ## 12. Open items for M2+
 
-1. **REVIEW** decisions above: §4 (resolution vs confidence), §5 (which envelope to draw), §6 (should a burst count as one origin).
+1. ~~Review decisions~~: decided. Resolutions are evidence (§4), draw the plausible envelope plus a faint reach ring (§5), flagged bursts are one vote (§6). Both engine behaviours are config switches, so a demo can show either side.
 2. Bearing-only reports carry the raw bearing, but their `position` is synthetic: placed along the bearing at the true range. M2 should draw a bearing wedge, not a point, for `bearing` observations.
 3. `quality` is a single number for now. If evaluators ask for it, it could be split into detection and classification quality.
 4. TypeScript 7 (the native compiler) is used for typechecking. If any M2 tooling (deck.gl types, Vite plugins) objects, pin 5.x.

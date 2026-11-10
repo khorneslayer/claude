@@ -62,13 +62,16 @@ function formatContradiction(c: ContradictionView, now: number): string[] {
       ? `DEFERRED ${formatElapsed((now - c.statusSinceT) / 1000)} by ${c.actedBy}`
       : c.status === "resolved"
         ? `RESOLVED → ${c.resolvedValue} by ${c.actedBy}`
-        : c.status.toUpperCase();
+        : c.reopened
+          ? `REOPENED ${formatElapsed((now - c.statusSinceT) / 1000)} ago (new evidence against the resolution)`
+          : c.status.toUpperCase();
   const hyps = c.hypotheses
     .map((h) => {
       const who = Object.entries(h.assertedBySourceType)
         .map(([t, n]) => `${t}×${n}`)
         .join(" ");
-      return `${h.label ?? h.value} ${h.value} ${f2(h.confidence)} [${who}]${h.live ? "" : " (stale)"}`;
+      const tag = h.status === "open" ? "" : ` ${h.status.toUpperCase()}`;
+      return `${h.label ?? h.value} ${h.value} ${f2(h.confidence)} [${who}]${tag}${h.live ? "" : " (stale)"}`;
     })
     .join("  vs  ");
   return [`  ${c.id} · ${status}  ${c.entityId} ${c.dimension}`, `      ${hyps}`];
@@ -86,7 +89,8 @@ function formatEntity(e: EntityView, now: number): string[] {
   lines.push(`  ${pad("", 9)} ${where}${e.flags.length ? "  [" + e.flags.join(", ") + "]" : ""}`);
   for (const h of e.hypotheses.filter((h) => h.label)) {
     const who = h.assertedBy.map((a) => a.sourceType).join("+");
-    lines.push(`  ${pad("", 9)} ${h.label} · ${h.value.toUpperCase()} CONF ${f2(h.confidence.value)} · asserted by ${who}`);
+    const tag = h.status === "open" ? "" : ` · ${h.status.toUpperCase()}`;
+    lines.push(`  ${pad("", 9)} ${h.label} · ${h.value.toUpperCase()} CONF ${f2(h.confidence.value)} · asserted by ${who}${tag}`);
   }
   void now;
   return lines;
@@ -108,6 +112,7 @@ function formatProvenance(s: PictureSnapshot, target: string): string[] {
       lines.push(
         `  ${pad(c.originId, 13)} ${pad(c.sourceType, 8)} ${formatClock(c.t)}  +${parts[i]!.toFixed(2)}   r ${f2(c.reliability)} × q ${f2(c.quality)} × decay ${f2(c.decay)} = w ${f2(c.weight)}  ${c.extraction}${c.verified ? " VERIFIED" : ""}`,
       );
+      if (c.members) lines.push(`  ${pad("", 13)} one vote for ${c.members.length} flagged origins: ${c.members.join(", ")}`);
       if (c.text) lines.push(`  ${pad("", 13)} "${c.text}"`);
     });
     const chain = breakdown.contributions[0]?.chain;

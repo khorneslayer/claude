@@ -41,8 +41,12 @@ export const DEFAULT_CONFIG: ProjectionConfig = {
   contradictionIdStart: 1,
   defaultClass: "UNKNOWN",
   classes: { UNKNOWN: DEFAULT_CLASS_PARAMS },
-  deception: { lowReliabilityBelow: 0.5, minReports: 6, burstSpanS: 60, radiusM: 3000, retainS: 600 },
+  deception: { lowReliabilityBelow: 0.5, minReports: 6, burstSpanS: 60, radiusM: 3000, retainS: 600, collapseFlaggedOrigins: true },
+  operator: { resolutionIsEvidence: true, reliability: { alpha: 8, beta: 2 }, halfLifeS: 1800 },
 };
+
+/** Virtual source that operator resolutions are attributed to. */
+export const OPERATOR_SOURCE_ID = "OPERATOR";
 
 type Verdict = "confirmed" | "falsified";
 type SourceTypeOrUnknown = SourceType | "UNKNOWN";
@@ -59,6 +63,9 @@ interface SourceState {
 
 interface Weighted {
   obs: ObservationEvent;
+  /** The vote this observation counts towards: its origin, or a flagged burst's shared vote. */
+  voteId?: string;
+  members?: string[];
   weight: number;
   reliability: number;
   decay: number;
@@ -186,7 +193,14 @@ interface ContradictionState {
   openedT: Millis;
   actions: OperatorActionEvent[];
   labelCount: number;
+  /** The resolution in force, if any. */
+  resolution?: { value: string; t: Millis; operatorId: string };
+  /** Set when a rejected value gained live support after the resolution. */
+  reopenedT?: Millis;
 }
+
+/** A set of evidence, optionally limited to observations made at or before `upTo`. */
+type EvidenceSet = GroupSet | { set: GroupSet; upTo: Millis };
 
 function candidateLabel(n: number): string {
   let s = "";
@@ -217,6 +231,8 @@ export class Projector {
   private readonly candidateLabels = new Map<string, string>(); // `${entity}\0${dim}\0${value}` -> CAND-x
   private readonly operatorActions: (OperatorActionEvent & { contradictionId?: string })[] = [];
   private nextContradiction = DEFAULT_CONFIG.contradictionIdStart;
+  /** origin -> shared vote id, for origins in a flagged burst. Only populated during evaluate(). */
+  private collapse = new Map<string, string>();
 
   get appliedSeq(): number {
     return this.lastSeq;
@@ -232,7 +248,12 @@ export class Projector {
     this.lastSeq = Math.max(this.lastSeq, e.seq);
     switch (e.kind) {
       case "config":
-        this.config = { ...DEFAULT_CONFIG, ...e.config, deception: { ...DEFAULT_CONFIG.deception, ...e.config.deception } };
+        this.config = {
+          ...DEFAULT_CONFIG,
+          ...e.config,
+          deception: { ...DEFAULT_CONFIG.deception, ...e.config.deception },
+          operator: { ...DEFAULT_CONFIG.operator, ...e.config.operator },
+        };
         this.nextContradiction = Math.max(this.nextContradiction, this.config.contradictionIdStart);
         break;
       case "source_registered":
@@ -278,15 +299,61 @@ export class Projector {
       }
       case "operator_action": {
         const c = this.contradictions.get(`${e.entityId}\u0000${e.dimension}`);
-        if (c) {
-          c.actions.push(e);
-          this.operatorActions.push({ ...e, contradictionId: c.id });
-        } else {
+        if (!c) {
           this.operatorActions.push({ ...e });
+          break;
+        }
+        c.actions.push(e);
+        this.operatorActions.push({ ...e, contradictionId: c.id });
+        if (e.action === "resolve" && e.value !== undefined) {
+          c.resolution = { value: e.value, t: e.t, operatorId: e.operatorId };
+          delete c.reopenedT;
+          if (this.config.operator.resolutionIsEvidence) this.applyOperatorEvidence(e, e.value);
         }
         break;
       }
     }
+  }
+
+  /** The operator's judgement enters as a report from the virtual OPERATOR source. */
+  private applyOperatorEvidence(e: OperatorActionEvent, value: string) {
+    if (!this.sources.has(OPERATOR_SOURCE_ID)) {
+      const op = this.config.operator;
+      this.sources.set(OPERATOR_SOURCE_ID, {
+        reg: {
+          kind: "source_registered",
+          seq: e.seq,
+          t: e.t,
+          sourceId: OPERATOR_SOURCE_ID,
+          sourceType: "OPERATOR",
+          label: "OPERATOR",
+          prior: { ...op.reliability },
+          halfLifeS: op.halfLifeS,
+          status: "up",
+        },
+        status: "up",
+        statusSinceT: e.t,
+        alpha: op.reliability.alpha,
+        beta: op.reliability.beta,
+        confirmed: 0,
+        falsified: 0,
+      });
+    }
+    this.applyObservation({
+      kind: "observation",
+      seq: e.seq,
+      t: e.t,
+      obsId: `OPR-${e.seq}`,
+      sourceId: OPERATOR_SOURCE_ID,
+      originId: e.operatorId,
+      entityId: e.entityId,
+      correlation: "scripted",
+      quality: 1,
+      claims: { [e.dimension]: value },
+      extraction: "human",
+      chain: ["OPERATOR DECISION"],
+      text: `resolved as ${value}`,
+    });
   }
 
   private halfLife(sourceId: string): number {
@@ -334,6 +401,16 @@ export class Projector {
       if (d.values.size < 2) continue;
       const key = `${o.entityId}\u0000${dim}`;
       const existing = this.contradictions.get(key);
+      // Fresh, live evidence for a value the operator rejected reopens the question.
+      if (
+        existing?.resolution &&
+        existing.reopenedT === undefined &&
+        value !== existing.resolution.value &&
+        o.t > existing.resolution.t &&
+        this.weigh(o, o.t).weight >= this.config.activeWeightEpsilon
+      ) {
+        existing.reopenedT = o.t;
+      }
       if (existing && this.candidateLabels.has(`${key}\u0000${value}`)) continue;
       const live = this.liveValues(d, o.t);
       if (existing) {
@@ -366,20 +443,49 @@ export class Projector {
     return v === "confirmed" ? { obs, weight, reliability, decay, verified: v } : { obs, weight, reliability, decay };
   }
 
-  /** Strongest weighted observation per origin across the given sets. */
-  private bestPerOrigin(sets: GroupSet[], at: Millis, upTo?: Millis): Weighted[] {
+  /**
+   * Strongest weighted observation per vote across the given sets. A vote is
+   * an origin, except that origins in a flagged burst share one vote.
+   */
+  private bestPerOrigin(sets: EvidenceSet[], at: Millis, upTo?: Millis): Weighted[] {
     const best = new Map<string, Weighted>();
-    for (const set of sets) {
+    const members = new Map<string, Set<string>>();
+    for (const entry of sets) {
+      const set = entry instanceof GroupSet ? entry : entry.set;
+      const limit = entry instanceof GroupSet ? upTo : upTo === undefined ? entry.upTo : Math.min(upTo, entry.upTo);
       for (const g of set.groups.values()) {
-        const cands = upTo === undefined ? g.candidates(this.verdicts) : g.candidatesUpTo(upTo, this.verdicts);
+        const cands = limit === undefined ? g.candidates(this.verdicts) : g.candidatesUpTo(limit, this.verdicts);
         for (const o of cands) {
+          const voteId = this.collapse.get(o.originId) ?? o.originId;
+          if (voteId !== o.originId) {
+            let m = members.get(voteId);
+            if (!m) members.set(voteId, (m = new Set()));
+            m.add(o.originId);
+          }
           const w = this.weigh(o, at);
-          const cur = best.get(o.originId);
-          if (!cur || w.weight > cur.weight || (w.weight === cur.weight && o.t > cur.obs.t)) best.set(o.originId, w);
+          const cur = best.get(voteId);
+          if (!cur || w.weight > cur.weight || (w.weight === cur.weight && o.t > cur.obs.t)) best.set(voteId, { ...w, voteId });
         }
       }
     }
+    for (const [voteId, m] of members) {
+      const w = best.get(voteId);
+      if (w) w.members = [...m].sort();
+    }
     return [...best.values()];
+  }
+
+  /** Evidence sets for one value on a dimension, honouring any resolution in force. */
+  private hypothesisEvidence(c: ContradictionState | undefined, d: DimState, value: string): EvidenceSet[] | "rejected" {
+    const set = d.values.get(value)!;
+    const res = c?.resolution && c.reopenedT === undefined && this.config.operator.resolutionIsEvidence ? c.resolution : undefined;
+    if (!res) return [d.neutral, set];
+    if (value !== res.value) return "rejected";
+    // Reports that asserted a rejected value before the decision still say something is there:
+    // they now count for the accepted reading.
+    const out: EvidenceSet[] = [d.neutral, set];
+    for (const [v, other] of d.values) if (v !== value) out.push({ set: other, upTo: res.t });
+    return out;
   }
 
   /** Values on a dimension with live support at `at`, in order of first appearance. */
@@ -409,7 +515,7 @@ export class Projector {
     const { value, shares } = combineNoisyOr(live.map((w) => w.weight));
     const contributions: Contribution[] = live.map((w, i) => {
       const c: Contribution = {
-        originId: w.obs.originId,
+        originId: w.voteId ?? w.obs.originId,
         sourceId: w.obs.sourceId,
         sourceType: this.sourceType(w.obs.sourceId),
         obsId: w.obs.obsId,
@@ -424,10 +530,15 @@ export class Projector {
       };
       if (w.verified) c.verified = w.verified;
       if (w.obs.text !== undefined) c.text = w.obs.text;
+      if (w.members) c.members = w.members;
       return c;
     });
     contributions.sort((a, b) => b.contribution - a.contribution || a.originId.localeCompare(b.originId));
     return { value, contributions };
+  }
+
+  private isResolvedTo(c: ContradictionState | undefined, value: string): boolean {
+    return c?.resolution !== undefined && c.reopenedT === undefined && c.resolution.value === value;
   }
 
   /** Origins with at least one standing (not falsified) report in the set. */
@@ -445,11 +556,28 @@ export class Projector {
   evaluate(now: Millis): PictureSnapshot {
     if (now < this.lastT) throw new Error(`Projector: cannot evaluate at ${now}, events up to ${this.lastT} are applied`);
     const config = this.config;
-    const classParams = (cls: string): EntityClassParams =>
-      config.classes[cls] ?? config.classes[config.defaultClass] ?? DEFAULT_CLASS_PARAMS;
-
     const flags = this.detectDeception(now);
     const flaggedEntities = new Set(flags.flatMap((f) => f.entityIds));
+    this.collapse = new Map();
+    if (config.deception.collapseFlaggedOrigins) {
+      for (const f of flags) {
+        for (const obsId of f.obsIds) {
+          const origin = this.obsById.get(obsId)!.originId;
+          if (!this.collapse.has(origin)) this.collapse.set(origin, f.id);
+        }
+      }
+    }
+    try {
+      return this.evaluateWith(now, flags, flaggedEntities);
+    } finally {
+      this.collapse = new Map();
+    }
+  }
+
+  private evaluateWith(now: Millis, flags: DeceptionFlag[], flaggedEntities: Set<string>): PictureSnapshot {
+    const config = this.config;
+    const classParams = (cls: string): EntityClassParams =>
+      config.classes[cls] ?? config.classes[config.defaultClass] ?? DEFAULT_CLASS_PARAMS;
 
     // Entities
     const entities: EntityView[] = [];
@@ -475,13 +603,16 @@ export class Projector {
 
       const hypotheses: HypothesisView[] = [];
       for (const [dim, d] of ent.dims) {
+        const c = this.contradictions.get(`${ent.id}\u0000${dim}`);
         for (const [value, set] of d.values) {
           const assertedBy = this.originsOf(set);
           if (assertedBy.length === 0) continue; // every assertion was falsified
+          const evidence = this.hypothesisEvidence(c, d, value);
           const h: HypothesisView = {
             dimension: dim,
             value,
-            confidence: this.breakdown(this.bestPerOrigin([d.neutral, set], now)),
+            status: evidence === "rejected" ? "rejected" : this.isResolvedTo(c, value) ? "accepted" : "open",
+            confidence: evidence === "rejected" ? { value: 0, contributions: [] } : this.breakdown(this.bestPerOrigin(evidence, now)),
             assertedBy,
           };
           const label = this.candidateLabels.get(`${ent.id}\u0000${dim}\u0000${value}`);
@@ -543,9 +674,11 @@ export class Projector {
         if (origins.length === 0) continue;
         const assertedBySourceType: Partial<Record<SourceTypeOrUnknown, number>> = {};
         for (const o of origins) assertedBySourceType[o.sourceType] = (assertedBySourceType[o.sourceType] ?? 0) + 1;
+        const evidence = this.hypothesisEvidence(c, d, value);
         const h: ContradictionView["hypotheses"][number] = {
           value,
-          confidence: combineNoisyOr(this.bestPerOrigin([d.neutral, set], now).map((w) => w.weight)).value,
+          status: evidence === "rejected" ? "rejected" : this.isResolvedTo(c, value) ? "accepted" : "open",
+          confidence: evidence === "rejected" ? 0 : combineNoisyOr(this.bestPerOrigin(evidence, now).map((w) => w.weight)).value,
           live: live.includes(value),
           assertedBySourceType,
         };
@@ -558,6 +691,11 @@ export class Projector {
       const last = c.actions[c.actions.length - 1];
       let status: ContradictionStatus = last?.action === "resolve" ? "resolved" : last?.action === "defer" ? "deferred" : "unresolved";
       let statusSinceT = last ? last.t : c.openedT;
+      const reopened = c.reopenedT !== undefined;
+      if (status === "resolved" && reopened) {
+        status = "unresolved";
+        statusSinceT = c.reopenedT!;
+      }
       if (status !== "resolved" && live.length < 2) {
         status = "lapsed";
         // When support fell away is not stored; report the later of the last action and the last assertion.
@@ -573,7 +711,8 @@ export class Projector {
         hypotheses: hyps,
       };
       if (last) view.actedBy = last.operatorId;
-      if (last?.action === "resolve" && last.value !== undefined) view.resolvedValue = last.value;
+      if (status === "resolved" && last?.action === "resolve" && last.value !== undefined) view.resolvedValue = last.value;
+      if (reopened) view.reopened = true;
       contradictionViews.push(view);
     }
     contradictionViews.sort((a, b) => a.openedT - b.openedT || a.id.localeCompare(b.id));
@@ -598,6 +737,7 @@ export class Projector {
 
     const byType = new Map<SourceType, SourceState[]>();
     for (const s of this.sources.values()) {
+      if (s.reg.sourceType === "OPERATOR") continue; // virtual, not a feed
       const list = byType.get(s.reg.sourceType);
       if (list) list.push(s);
       else byType.set(s.reg.sourceType, [s]);

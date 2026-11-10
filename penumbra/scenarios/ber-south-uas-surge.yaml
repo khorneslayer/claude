@@ -41,6 +41,11 @@ config:
     burstSpanS: 60
     radiusM: 3000
     retainS: 600
+    collapseFlaggedOrigins: true   # a flagged burst casts one shared vote
+  operator:
+    resolutionIsEvidence: true     # a resolution is evidence for the accepted value
+    reliability: { alpha: 8, beta: 2 }
+    halfLifeS: 1800
 
 classes:
   UAS_SMALL:                     # consumer quadcopter, tracked by sensors

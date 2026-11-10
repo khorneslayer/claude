@@ -53,6 +53,7 @@ const DEFAULT_CHAIN: Record<SourceType, string[]> = {
   RADAR: ["INGEST", "CORRELATE", "FUSION OUT"],
   CIV_CALL: ["INGEST", "NL PARSE", "CORRELATE", "FUSION OUT"],
   SOCIAL: ["SCRAPE", "NL PARSE", "CORRELATE", "FUSION OUT"],
+  OPERATOR: ["OPERATOR DECISION"],
 };
 const DEFAULT_EXTRACTION: Record<SourceType, Extraction> = {
   RF: "sensor",
@@ -61,6 +62,7 @@ const DEFAULT_EXTRACTION: Record<SourceType, Extraction> = {
   RADAR: "sensor",
   CIV_CALL: "human",
   SOCIAL: "ai",
+  OPERATOR: "human",
 };
 
 /** Ordering of simultaneous events: config, sources, status, observations, verdicts, operators. */
@@ -110,7 +112,14 @@ export function compileScenario(def: ScenarioDef, opts: CompileOptions = {}): Co
       burstSpanS: 60,
       radiusM: 3000,
       retainS: 600,
+      collapseFlaggedOrigins: true,
       ...def.config?.deception,
+    },
+    operator: {
+      resolutionIsEvidence: true,
+      reliability: { alpha: 8, beta: 2 },
+      halfLifeS: 1800,
+      ...def.config?.operator,
     },
   };
   drafts.push({ event: { kind: "config", t: logStart, config }, beat: -2, sub: 0 });

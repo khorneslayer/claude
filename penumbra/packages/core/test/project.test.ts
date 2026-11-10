@@ -131,7 +131,7 @@ describe("project: contradictions", () => {
     expect(labels).toEqual({ hobbyist: "CAND-A", "coordinated-pair": "CAND-B" });
   });
 
-  it("records deferral and resolution as operator decisions without changing confidence", () => {
+  it("records a deferral without changing any confidence", () => {
     const b = conflict();
     const before = project(b.events, s(40));
     b.add({ kind: "operator_action", t: s(40), operatorId: "OP-2", action: "defer", entityId: "C-1", dimension: "intent" });
@@ -139,13 +139,70 @@ describe("project: contradictions", () => {
     expect(deferred.contradictions[0]!.status).toBe("deferred");
     expect(deferred.contradictions[0]!.actedBy).toBe("OP-2");
     expect(deferred.entities[0]!.hypotheses).toEqual(before.entities[0]!.hypotheses);
+    expect(deferred.entities[0]!.confidence).toEqual(before.entities[0]!.confidence);
+  });
 
+  it("treats a resolution as evidence: operator vote for the accepted value, rejected value to zero", () => {
+    const b = conflict();
+    const before = project(b.events, s(50)).entities[0]!;
     b.add({ kind: "operator_action", t: s(50), operatorId: "OP-1", action: "resolve", entityId: "C-1", dimension: "intent", value: "hobbyist" });
-    const resolved = project(b.events, s(50));
-    expect(resolved.contradictions[0]!.status).toBe("resolved");
-    expect(resolved.contradictions[0]!.resolvedValue).toBe("hobbyist");
-    expect(resolved.entities[0]!.flags).not.toContain("CONTRADICTED");
-    expect(resolved.operatorActions.map((a) => a.contradictionId)).toEqual(["CTR-003", "CTR-003"]);
+    const snap = project(b.events, s(50));
+    const e = snap.entities[0]!;
+    const accepted = e.hypotheses.find((h) => h.value === "hobbyist")!;
+    const rejected = e.hypotheses.find((h) => h.value === "coordinated-pair")!;
+    const beforeAccepted = before.hypotheses.find((h) => h.value === "hobbyist")!;
+
+    expect([accepted.status, rejected.status]).toEqual(["accepted", "rejected"]);
+    expect(rejected.confidence).toEqual({ value: 0, contributions: [] });
+    expect(accepted.confidence.value).toBeGreaterThan(beforeAccepted.confidence.value);
+    // The operator is a visible contribution, and the caller who asserted the rejected value now counts for the accepted one.
+    const origins = accepted.confidence.contributions.map((c) => c.originId).sort();
+    expect(origins).toEqual(["CALLER-1", "OP-1", "RF-N"]);
+    const op = accepted.confidence.contributions.find((c) => c.originId === "OP-1")!;
+    expect([op.sourceType, op.extraction, op.reliability]).toEqual(["OPERATOR", "human", 0.8]);
+    expect(sumOf(accepted.confidence.contributions)).toBeCloseTo(accepted.confidence.value, 12);
+    // Existence confidence gains the operator's vote too.
+    expect(e.confidence.value).toBeGreaterThan(before.confidence.value);
+
+    const c = snap.contradictions[0]!;
+    expect([c.status, c.resolvedValue, c.actedBy]).toEqual(["resolved", "hobbyist", "OP-1"]);
+    expect(c.hypotheses.find((h) => h.value === "coordinated-pair")).toMatchObject({ status: "rejected", confidence: 0 });
+    expect(e.flags).not.toContain("CONTRADICTED");
+    expect(snap.operatorActions.map((a) => a.contradictionId)).toEqual(["CTR-003"]);
+    // The virtual OPERATOR source is listed, but it is not a feed.
+    expect(snap.sources.some((x) => x.id === "OPERATOR")).toBe(true);
+    expect(snap.feedHealth.some((f) => f.sourceType === "OPERATOR")).toBe(false);
+  });
+
+  it("reopens when fresh live evidence for a rejected value arrives after the resolution", () => {
+    const b = conflict();
+    b.add({ kind: "operator_action", t: s(50), operatorId: "OP-1", action: "resolve", entityId: "C-1", dimension: "intent", value: "hobbyist" });
+    b.report(s(80), "CIV", "C-1", { origin: "CALLER-9", quality: 0.6, claims: { intent: "coordinated-pair" } });
+    const snap = project(b.events, s(80));
+    const c = snap.contradictions[0]!;
+    expect([c.status, c.reopened, c.statusSinceT, c.resolvedValue]).toEqual(["unresolved", true, s(80), undefined]);
+    const pair = snap.entities[0]!.hypotheses.find((h) => h.value === "coordinated-pair")!;
+    expect(pair.status).toBe("open");
+    expect(pair.confidence.value).toBeGreaterThan(0);
+    expect(snap.entities[0]!.flags).toContain("CONTRADICTED");
+    // A fresh resolution settles it again.
+    b.add({ kind: "operator_action", t: s(90), operatorId: "OP-1", action: "resolve", entityId: "C-1", dimension: "intent", value: "coordinated-pair" });
+    const again = project(b.events, s(90)).contradictions[0]!;
+    expect([again.status, again.resolvedValue, again.reopened]).toEqual(["resolved", "coordinated-pair", undefined]);
+  });
+
+  it("can be switched back to resolution-as-record-only", () => {
+    const b = new LogBuilder({ ...testConfig, operator: { ...testConfig.operator, resolutionIsEvidence: false } })
+      .source("RF-N")
+      .source("CIV", { type: "CIV_CALL", alpha: 5, beta: 7, halfLifeS: 600 });
+    b.report(s(0), "CIV", "C-1", { origin: "CALLER-1", quality: 0.5, claims: { intent: "coordinated-pair" } });
+    b.report(s(30), "RF-N", "C-1", { quality: 0.6, claims: { intent: "hobbyist" } });
+    const before = project(b.events, s(50)).entities[0]!;
+    b.add({ kind: "operator_action", t: s(50), operatorId: "OP-1", action: "resolve", entityId: "C-1", dimension: "intent", value: "hobbyist" });
+    const after = project(b.events, s(50));
+    expect(after.contradictions[0]!.status).toBe("resolved");
+    expect(after.entities[0]!.confidence).toEqual(before.confidence);
+    expect(after.entities[0]!.hypotheses.map((h) => h.confidence)).toEqual(before.hypotheses.map((h) => h.confidence));
   });
 
   it("lapses when support for all but one value has decayed", () => {
@@ -196,13 +253,28 @@ describe("project: deception flags", () => {
     expect(snap.entities[0]!.flags).toContain("DECEPTION_FLAG");
   });
 
-  it("does not change confidence: it flags, it does not adjudicate", () => {
-    const b = burst(7);
-    const withFlag = project(b.events, s(40)).entities[0]!.confidence.value;
-    const b2 = new LogBuilder({ ...testConfig, deception: { ...testConfig.deception, minReports: 99 } }).source("SOC", { type: "SOCIAL", alpha: 2, beta: 9, halfLifeS: 900 });
+  it("counts a flagged burst as one shared vote", () => {
+    const e = project(burst(7).events, s(40)).entities[0]!;
+    expect(e.sourceCount).toBe(1);
+    expect(e.confidence.contributions).toHaveLength(1);
+    const vote = e.confidence.contributions[0]!;
+    expect(vote.originId).toMatch(/^DF-/);
+    expect(vote.members).toEqual(["ACCT-0", "ACCT-1", "ACCT-2", "ACCT-3", "ACCT-4", "ACCT-5"]);
+    expect(e.confidence.value).toBeCloseTo(vote.weight, 12);
+  });
+
+  it("uses independent votes again when collapsing is switched off", () => {
+    const b2 = new LogBuilder({ ...testConfig, deception: { ...testConfig.deception, collapseFlaggedOrigins: false } }).source("SOC", { type: "SOCIAL", alpha: 2, beta: 9, halfLifeS: 900 });
     for (let i = 0; i < 6; i++) b2.report(s(i * 7), "SOC", "TRK-70", { origin: `ACCT-${i}`, position: offsetM(CENTER, i * 50, 0) });
-    expect(project(b2.events, s(40)).flags).toHaveLength(0);
-    expect(project(b2.events, s(40)).entities[0]!.confidence.value).toBe(withFlag);
+    const snap = project(b2.events, s(40));
+    expect(snap.flags).toHaveLength(1);
+    expect(snap.entities[0]!.sourceCount).toBe(6);
+    expect(snap.entities[0]!.confidence.value).toBeGreaterThan(project(burst(7).events, s(40)).entities[0]!.confidence.value);
+  });
+
+  it("restores independent votes once the flag expires", () => {
+    const e = project(burst(7).events, s(35 + 601)).entities[0]!;
+    expect(e.confidence.contributions.every((c) => c.members === undefined)).toBe(true);
   });
 
   it("does not flag the same number of reports spread out like independent observers", () => {

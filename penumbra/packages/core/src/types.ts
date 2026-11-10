@@ -10,7 +10,8 @@
 /** Simulation time: milliseconds since the Unix epoch, UTC. */
 export type Millis = number;
 
-export type SourceType = "RF" | "ADSB" | "EO" | "RADAR" | "CIV_CALL" | "SOCIAL";
+/** OPERATOR is virtual: operator resolutions enter the picture as evidence from it. */
+export type SourceType = "RF" | "ADSB" | "EO" | "RADAR" | "CIV_CALL" | "SOCIAL" | "OPERATOR";
 export type SourceStatus = "up" | "degraded" | "down";
 /** How the content of an observation was produced. */
 export type Extraction = "sensor" | "human" | "ai";
@@ -51,6 +52,20 @@ export interface ProjectionConfig {
   defaultClass: string;
   classes: Record<string, EntityClassParams>;
   deception: DeceptionParams;
+  operator: OperatorParams;
+}
+
+/** How operator resolutions feed the picture. */
+export interface OperatorParams {
+  /**
+   * When true, resolving a contradiction (a) adds the operator's judgement as
+   * evidence for the accepted value, from the virtual OPERATOR source, and
+   * (b) re-reads earlier reports asserting a rejected value as support for
+   * the accepted one. The rejected hypothesis drops to zero.
+   */
+  resolutionIsEvidence: boolean;
+  reliability: { alpha: number; beta: number };
+  halfLifeS: number;
 }
 
 export interface EntityClassParams {
@@ -79,6 +94,8 @@ export interface DeceptionParams {
   radiusM: number;
   /** A flag stays raised this long after the last report of the burst. */
   retainS: number;
+  /** When true, every origin in a flagged burst casts a single, shared vote. */
+  collapseFlaggedOrigins: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +217,8 @@ export interface Contribution {
   chain: string[];
   verified?: "confirmed";
   text?: string;
+  /** Present when several origins were merged into this one vote (a flagged burst): the merged origins. */
+  members?: string[];
 }
 
 export interface ConfidenceBreakdown {
@@ -208,9 +227,13 @@ export interface ConfidenceBreakdown {
   contributions: Contribution[];
 }
 
+export type HypothesisStatus = "open" | "accepted" | "rejected";
+
 export interface HypothesisView {
   dimension: string;
   value: string;
+  /** accepted / rejected once an operator resolution is in force. */
+  status: HypothesisStatus;
   /** CAND-x label, assigned when the value first takes part in a contradiction. */
   label?: string;
   confidence: ConfidenceBreakdown;
@@ -255,10 +278,13 @@ export interface ContradictionView {
   statusSinceT: Millis;
   actedBy?: string;
   resolvedValue?: string;
+  /** New evidence for a rejected value arrived after the resolution: a fresh decision is needed. */
+  reopened?: boolean;
   /** Every value seen on this dimension, with live confidence. */
   hypotheses: {
     value: string;
     label?: string;
+    status: HypothesisStatus;
     confidence: number;
     live: boolean;
     assertedBySourceType: Partial<Record<SourceType | "UNKNOWN", number>>;

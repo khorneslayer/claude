@@ -190,11 +190,24 @@ describe("key frame 14:41:22Z reproduces the slide 7 target screen", () => {
     expect(snap.entities.find((e) => e.id === "TRK-1139")).toBeUndefined();
   });
 
+  it("the planted swarm burst counts as one vote, so TRK-1170 stays weak", () => {
+    const e = entity("TRK-1170");
+    expect(e.sourceCount).toBe(1);
+    expect(e.confidence.contributions[0]!.members).toHaveLength(6);
+    expect(e.confidence.value).toBeLessThan(0.15);
+  });
+
   it("after the key frame, police confirmation and OP-1 resolve CTR-004 as hobbyist", () => {
     const end = project(compiled.events, compiled.meta.end);
     const c = end.contradictions.find((x) => x.id === "CTR-004")!;
     expect([c.status, c.resolvedValue, c.actedBy]).toEqual(["resolved", "hobbyist", "OP-1"]);
     expect(end.sources.find((s) => s.id === "RF-SENSE-N")!.confirmed).toBe(1);
+    const hyps = end.entities.find((e) => e.id === "TRK-1155")!.hypotheses;
+    const a = hyps.find((h) => h.label === "CAND-A")!;
+    const b = hyps.find((h) => h.label === "CAND-B")!;
+    expect([a.status, b.status, b.confidence.value]).toEqual(["accepted", "rejected", 0]);
+    expect(a.confidence.value).toBeGreaterThan(0.9);
+    expect(a.confidence.contributions.map((x) => x.originId)).toEqual(expect.arrayContaining(["OP-1", "RF-SENSE-N", "CALLER-1", "CALLER-3"]));
   });
 });
 

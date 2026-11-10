@@ -12,7 +12,8 @@ export const testConfig: ProjectionConfig = {
   classes: {
     UAS: { cruiseSpeedMps: 15, maxSpeedMps: 23, headingPersistenceS: 5, enduranceS: 1800, ghostAfterS: 30, retainGhostS: 3600 },
   },
-  deception: { lowReliabilityBelow: 0.5, minReports: 6, burstSpanS: 60, radiusM: 3000, retainS: 600 },
+  deception: { lowReliabilityBelow: 0.5, minReports: 6, burstSpanS: 60, radiusM: 3000, retainS: 600, collapseFlaggedOrigins: true },
+  operator: { resolutionIsEvidence: true, reliability: { alpha: 8, beta: 2 }, halfLifeS: 1800 },
 };
 
 /** Small fluent builder for hand-written logs. */

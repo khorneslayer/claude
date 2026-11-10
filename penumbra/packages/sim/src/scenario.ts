@@ -23,7 +23,10 @@ export interface ScenarioDef {
     end: string;
   };
   area: { center: LatLonTuple; label?: string };
-  config?: Partial<Omit<ProjectionConfig, "classes">>;
+  config?: Partial<Omit<ProjectionConfig, "classes" | "deception" | "operator">> & {
+    deception?: Partial<ProjectionConfig["deception"]>;
+    operator?: Partial<ProjectionConfig["operator"]>;
+  };
   classes: Record<string, EntityClassParams>;
   sources: SourceDef[];
   tracks?: Record<string, WaypointDef[]>;

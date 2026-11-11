@@ -55,6 +55,8 @@ const SHOW_STATS = params.has("stats");
 const OPERATOR = params.get("op") ?? "OP-1";
 const SCRIPTED = params.has("scripted");
 const SCENARIO = scenarioKey(params.get("scenario"));
+/** Static hosting (Vercel): no feed server, so play in the browser from the start. Set VITE_STATIC=1 at build time. */
+const STATIC = import.meta.env.VITE_STATIC === "1";
 /** Mock releasability marking (slide 6, item 08): visible without opening a dialogue. */
 const MARKING = "EXERCISE · SYNTHETIC DATA · REL DEU/NLD (MOCK)";
 export type ViewMode = "penumbra" | "legacy";
@@ -134,10 +136,10 @@ export function App() {
         ...(STRESS ? { stress: STRESS } : {}),
         scripted: SCRIPTED || DEMO,
       });
-    if (FROZEN_AT || STRESS || PROBE || params.get("mode") === "offline") {
+    if (STATIC || FROZEN_AT || STRESS || PROBE || params.get("mode") === "offline") {
       offline();
       // The probe plays offline, but its answers still go to the feed server's session store when one is reachable.
-      if (PROBE)
+      if (PROBE && !STATIC)
         void fetch("/api/sessions")
           .then((r) => r.ok && recorder.enableRemote())
           .catch(() => {});
@@ -532,6 +534,18 @@ export function App() {
         replay={replayT !== undefined && !PROBE}
         view={view}
         onView={setView}
+        {...(status === "offline" && !LOCKED
+          ? {
+              onScenario: (k: string) => {
+                // Reload on the chosen scenario, keeping the view but not a frozen moment or replay.
+                const next = new URLSearchParams(window.location.search);
+                next.set("scenario", k);
+                next.delete("t");
+                next.delete("replay");
+                window.location.search = next.toString();
+              },
+            }
+          : {})}
         {...(snap ? { t: snap.t } : {})}
       />
       <div className="body">

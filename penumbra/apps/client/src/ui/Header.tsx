@@ -1,5 +1,8 @@
 import { formatClock, type FeedHealth } from "@penumbra/core";
 import type { FeedStatus, FeedStore } from "../feed/store";
+import { SCENARIOS, type ScenarioKey } from "../scenarios";
+
+const SCENARIO_NAMES: Record<ScenarioKey, string> = { ber: "BER · FULL SENSOR NETWORK", mrb: "KMRB · LOW-COST KIT" };
 
 const NAMES: Partial<Record<FeedHealth["sourceType"], string>> = { ADSB: "ADS-B", RF: "RF SENSE", EO: "EO", REMOTE_ID: "REMOTE ID", CIV_CALL: "CIV REPORTS" };
 const ORDER = ["ADSB", "RF", "EO", "REMOTE_ID", "CIV_CALL"];
@@ -30,13 +33,26 @@ export function Header(props: {
   locked?: boolean;
   view: "penumbra" | "legacy";
   onView: (v: "penumbra" | "legacy") => void;
+  /** Offline player: switch scenario (reloads). Absent on a live feed, which plays what the server runs. */
+  onScenario?: (k: ScenarioKey) => void;
 }) {
-  const { store, status, operator, t, health, frozen, replay, view, onView, locked = false } = props;
+  const { store, status, operator, t, health, frozen, replay, view, onView, onScenario, locked = false } = props;
+  const current = (Object.keys(SCENARIOS) as ScenarioKey[]).find((k) => SCENARIOS[k].id === store.meta?.id);
   const clock = store.clock;
   return (
     <header className="header">
       <div className="wordmark">PENUMBRA</div>
-      <div className="scenario">{store.meta?.title ?? "connecting…"}</div>
+      {onScenario && current ? (
+        <select className="scenario scenario-pick" value={current} onChange={(e) => onScenario(e.target.value as ScenarioKey)} title="Scenario" aria-label="Scenario">
+          {(Object.keys(SCENARIOS) as ScenarioKey[]).map((k) => (
+            <option key={k} value={k}>
+              {k === current ? store.meta!.title : SCENARIO_NAMES[k]}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <div className="scenario">{store.meta?.title ?? "connecting…"}</div>
+      )}
       <div className="chips">
         {feedChips(health).map((c) => (
           <span key={c.key} className={`chip ${c.tone}`}>
